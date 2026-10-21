@@ -365,3 +365,79 @@ a.metric:hover { background: var(--brand-softer); }
   .content { padding: 0; }
   .panel { border: 0; }
 }
+
+/* ------------------------------------------------------------------ encomendas */
+.nav-badge { margin-left: auto; background: var(--accent); color: var(--ink); font-size: .72rem; font-weight: 800; border-radius: 999px; padding: .05rem .45rem; min-width: 1.4rem; text-align: center; }
+.metrics-6 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.metric .value small { font-weight: 600; }
+.prio { display: inline-block; font-size: .72rem; font-weight: 800; padding: .1rem .45rem; border-radius: var(--radius-sm); border: 1px solid; white-space: nowrap; }
+.prio-alta { color: var(--warn); border-color: #E7C894; background: var(--warn-soft); }
+.prio-urgente { color: #fff; background: var(--neg); border-color: var(--neg); }
+
+.alert-list { list-style: none; margin: 0; padding: .4rem 1.25rem; }
+.alert-list li { display: flex; flex-wrap: wrap; gap: .3rem .7rem; align-items: baseline; padding: .5rem 0; border-bottom: 1px dashed var(--line); }
+.alert-list li:last-child { border-bottom: 0; }
+.alert-tag { font-size: .72rem; font-weight: 800; padding: .1rem .5rem; border-radius: 999px; background: var(--proj-soft); color: var(--proj); min-width: 7.5rem; text-align: center; }
+.alert-atrasada .alert-tag { background: var(--neg-soft); color: var(--neg); }
+.alert-proxima .alert-tag, .alert-pendencia .alert-tag { background: var(--warn-soft); color: var(--warn); }
+.alert-pronta .alert-tag { background: var(--pos-soft); color: var(--pos); }
+
+.kanban { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(250px, 1fr); gap: .9rem; overflow-x: auto; padding-bottom: .6rem; align-items: start; }
+.kcol { background: #EFEBF0; border-radius: var(--radius-lg); border: 1px solid var(--line); display: flex; flex-direction: column; max-height: 78vh; }
+.kcol.can-drop { outline: 2px dashed rgba(var(--brand-rgb), .45); outline-offset: -4px; }
+.kcol.over { background: var(--brand-soft); }
+.kcol-head { display: flex; justify-content: space-between; align-items: center; padding: .7rem .85rem .5rem; }
+.kcol-head h2 { font-size: .88rem; font-weight: 750; margin: 0; color: var(--ink); }
+.kcol-head small { color: var(--muted); font-weight: 600; }
+.kcount { font-size: .78rem; font-weight: 800; color: var(--muted); background: var(--panel); border-radius: 999px; padding: .05rem .5rem; border: 1px solid var(--line); }
+.kcol-body { padding: .2rem .55rem .7rem; overflow-y: auto; display: flex; flex-direction: column; gap: .55rem; }
+.kempty { color: var(--faint); font-size: .85rem; text-align: center; padding: .8rem 0; margin: 0; }
+.kcard { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: .7rem .75rem .6rem; display: flex; flex-direction: column; gap: .3rem; font-size: .88rem; }
+.kcard[draggable=true] { cursor: grab; }
+.kcard.dragging { opacity: .5; }
+.kcard.is-late { border-color: #E6B3BB; box-shadow: inset 3px 0 0 var(--neg); }
+.kcard.prio-urgente:not(.is-late) { box-shadow: inset 3px 0 0 var(--accent); }
+.kcard-top { display: flex; justify-content: space-between; align-items: center; gap: .4rem; }
+.kcard-code { font-weight: 800; color: var(--brand-strong); text-decoration: none; letter-spacing: .01em; }
+.kcard-code:hover { text-decoration: underline; }
+.kcard-name { font-weight: 650; color: var(--ink); }
+.kcard-items { color: var(--muted); font-size: .82rem; }
+.kcard-due { font-size: .82rem; font-weight: 650; color: var(--ink-3); }
+.kcard-due.late { color: var(--neg); }
+.kcard-due.soon { color: var(--warn); }
+.kcard-foot { display: flex; justify-content: space-between; align-items: baseline; font-weight: 700; }
+.kcard-meta { display: flex; gap: .4rem; align-items: center; font-size: .76rem; color: var(--muted); }
+.kcard-move .form-select { font-size: .8rem; padding-top: .2rem; padding-bottom: .2rem; margin-top: .2rem; }
+
+.stepper { list-style: none; display: flex; flex-wrap: wrap; gap: .35rem; padding: 0; margin: 0; counter-reset: st; }
+.stepper li { counter-increment: st; font-size: .82rem; font-weight: 650; color: var(--faint); padding: .3rem .7rem .3rem .45rem; border-radius: 999px; border: 1px solid var(--line); display: flex; gap: .4rem; align-items: center; }
+.stepper li::before { content: counter(st); width: 1.25rem; height: 1.25rem; border-radius: 50%; display: inline-grid; place-items: center; font-size: .7rem; background: var(--line); color: var(--muted); }
+.stepper li.done { color: var(--pos); border-color: #C5E1D3; }
+.stepper li.done::before { content: "✓"; background: var(--pos-soft); color: var(--pos); }
+.stepper li.current { color: #fff; background: var(--ink); border-color: var(--ink); }
+.stepper li.current::before { background: var(--accent); color: var(--ink); }
+
+.timeline { list-style: none; margin: 0; padding: .6rem 1.25rem 1rem; }
+.timeline li { position: relative; padding: .55rem 0 .55rem 1.1rem; border-left: 2px solid var(--line); }
+.timeline li::before { content: ""; position: absolute; left: -6px; top: .85rem; width: 10px; height: 10px; border-radius: 50%; background: var(--line-strong); }
+.timeline li.tl-status::before { background: var(--brand); }
+.timeline li.tl-pagamento::before { background: var(--pos); }
+.timeline li.tl-estorno::before, .timeline li.tl-cancelamento::before { background: var(--neg); }
+.tl-when { font-size: .78rem; color: var(--muted); }
+.tl-what { font-size: .92rem; }
+.tl-diff summary { font-size: .8rem; color: var(--brand-strong); cursor: pointer; }
+.tl-diff .table-dl td { font-size: .82rem; padding: .3rem .5rem; }
+.pre { white-space: pre-line; }
+.order-items { min-width: 860px; }
+.order-items td:nth-child(4) { width: 70px; }
+.order-items td:nth-child(5), .order-items td:nth-child(6) { width: 120px; }
+.author { font-size: .82rem; color: var(--muted); }
+
+@media (max-width: 1100px) { .metrics-6 { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 860px) {
+  .kanban { grid-auto-columns: 82%; scroll-snap-type: x mandatory; }
+  .kcol { scroll-snap-align: start; max-height: none; }
+}
+@media (max-width: 520px) { .metrics-6 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.content { min-width: 0; }
+.kanban { width: 100%; min-width: 0; }

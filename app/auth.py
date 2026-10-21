@@ -27,7 +27,7 @@ def load_user(user_key: str):
         user = db.session.get(User, int(uid))
     except (ValueError, TypeError):
         return None
-    if user is None or str(user.session_version) != version:
+    if user is None or not user.active or str(user.session_version) != version:
         return None
     return user
 
@@ -80,6 +80,13 @@ def login():
             db.session.commit()
             flash(LOCKED_ERROR, "danger")
             return render_template("auth/login.html", username=username, has_user=has_user), 429
+
+        if user is not None and not user.active:
+            user.check_password(password)  # mesmo custo de tempo
+            db.session.add(LoginAttempt(ip=ip, username=username, success=False))
+            db.session.commit()
+            flash(GENERIC_ERROR, "danger")
+            return render_template("auth/login.html", username=username, has_user=has_user), 401
 
         if user is None:
             from werkzeug.security import check_password_hash, generate_password_hash

@@ -38,7 +38,8 @@
           <dt>Conta prevista</dt><dd>{{ t.expected_account.name if t.expected_account else '—' }}</dd>
           {% if t.notes %}<dt>Observações</dt><dd>{{ t.notes }}</dd>{% endif %}
           {% if t.is_canceled %}<dt>Cancelado em</dt><dd>{{ t.canceled_at|data }} — {{ t.cancel_reason }}</dd>{% endif %}
-          <dt>Registrado em</dt><dd>{{ t.created_at|data }}</dd>
+          <dt>Registrado em</dt><dd>{{ t.created_at|data }}{% if t.created_by %} por {{ t.created_by.label }}{% endif %}</dd>
+          {% if t.is_canceled and t.canceled_by %}<dt>Cancelado por</dt><dd>{{ t.canceled_by.label }}</dd>{% endif %}
         </dl>
       </div>
     </section>
@@ -54,7 +55,8 @@
               <td>{{ s.date|data }}</td>
               <td>{% if s.is_reversal %}Estorno{% else %}{{ 'Recebimento' if receive else 'Pagamento' }}{% endif %}
                 {% if s.notes %}<span class="sub">{{ s.notes }}</span>{% endif %}
-                {% if s.reversal %}<span class="sub">Estornado em {{ s.reversal.date|data }}</span>{% endif %}</td>
+                {% if s.reversal %}<span class="sub">Estornado em {{ s.reversal.date|data }}{% if s.reversal.created_by %} por {{ s.reversal.created_by.label }}{% endif %}</span>{% endif %}
+                <span class="sub">Registrado por {{ s.created_by.label if s.created_by else '—' }}</span></td>
               <td>{{ s.account.name }}</td>
               <td>{{ s.payment_method.name if s.payment_method else '—' }}</td>
               <td class="num">{{ (-s.amount if s.is_reversal else s.amount)|brl }}</td>

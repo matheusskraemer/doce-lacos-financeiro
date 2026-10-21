@@ -37,14 +37,15 @@
   <div><label for="f-b">Base</label><select class="form-select" id="f-b" name="base" data-autosubmit>
     <option value="caixa" {{ 'selected' if flt.basis == 'caixa' }}>Caixa (pagas)</option><option value="competencia" {{ 'selected' if flt.basis == 'competencia' }}>Competência (lançadas)</option></select></div>
   {% endif %}
-  {% if rep.key in ('vendas','compras','a_pagar','a_receber') %}
+  {% if rep.key in ('vendas','compras','a_pagar','a_receber','enc_recebidas') %}
   <div><label for="f-st">Situação</label><select class="form-select" id="f-st" name="status" data-autosubmit><option value="">Todas</option>
     {% if rep.key == 'vendas' %}{% set sts = [('recebida','Recebida'),('parcial','Em parte'),('a_receber','A receber'),('cancelada','Cancelada')] %}
+    {% elif rep.key == 'enc_recebidas' %}{% set sts = [('novo','Novo pedido'),('aguardando','Aguardando confirmação'),('confirmado','Confirmado'),('producao','Em produção'),('pronto','Pronto'),('saiu','Saiu para entrega'),('entregue','Entregue'),('cancelado','Cancelado')] %}
     {% elif rep.key == 'compras' %}{% set sts = [('paga','Paga'),('parcial','Em parte'),('a_pagar','A pagar'),('cancelada','Cancelada')] %}
     {% else %}{% set sts = [('pendente','A vencer'),('vencido','Vencida'),('parcial','Em parte'),('liquidado','Liquidada'),('cancelado','Cancelada')] %}{% endif %}
     {% for k, l in sts %}<option value="{{ k }}" {{ 'selected' if flt.status == k }}>{{ l }}</option>{% endfor %}</select></div>
   {% endif %}
-  {% if rep.key not in ('fluxo_mensal','resultado','despesas_categoria') %}
+  {% if rep.key not in ('fluxo_mensal','resultado','despesas_categoria','enc_produtos') %}
   <div><label for="f-q">Buscar</label><input class="form-control" id="f-q" name="q" value="{{ flt.search }}"></div>
   {% endif %}
   <button class="btn btn-quiet" type="submit">Filtrar</button>

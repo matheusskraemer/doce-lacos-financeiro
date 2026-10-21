@@ -3,12 +3,12 @@
 {% set page_title = "Compra #" ~ p.id %}
 {% block content %}
 <div class="page-head">
-  <div><div class="small text-muted mb-1">Compra #{{ p.id }} · {{ p.purchase_date|data }}</div>
+  <div><div class="small text-muted mb-1">Compra #{{ p.id }} · {{ p.purchase_date|data }}{% if p.created_by %} · registrada por {{ p.created_by.label }}{% endif %}</div>
     <h1 class="page-title">Compra de mercadorias{% if p.supplier %} — {{ p.supplier }}{% endif %}</h1>
     <p class="page-sub">{{ doc_status(p.payment_status, statuses) }}</p></div>
   <a class="btn btn-quiet" href="{{ url_for('produtos.compras') }}"><i class="bi bi-arrow-left"></i> Compras</a>
 </div>
-{% if p.status == 'cancelada' %}<div class="flash flash-warning mb-4"><i class="bi bi-slash-circle"></i><div>Cancelada em {{ p.canceled_at|data }}. Motivo: {{ p.cancel_reason }}.</div></div>{% endif %}
+{% if p.status == 'cancelada' %}<div class="flash flash-warning mb-4"><i class="bi bi-slash-circle"></i><div>Cancelada em {{ p.canceled_at|data }}{% if p.canceled_by %} por {{ p.canceled_by.label }}{% endif %}. Motivo: {{ p.cancel_reason }}.</div></div>{% endif %}
 <div class="row g-4">
   <div class="col-lg-7">
     <section class="panel mb-4"><div class="panel-body"><div class="row g-3">

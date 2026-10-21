@@ -1,0 +1,182 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf, reqkey, money_field, select_opts, title_status %}
+{% set page_title = o.code %}
+{% block content %}
+{% set late = o.is_late(now) %}
+<div class="page-head">
+  <div>
+    <div class="small text-muted mb-1">Encomenda · {{ o.channel_label }} · entrou em {{ o.created_at|data }}{% if o.created_by %} por {{ o.created_by.label }}{% endif %}</div>
+    <h1 class="page-title">{{ o.code }} · {{ o.customer_name }}</h1>
+    <p class="page-sub d-flex flex-wrap gap-2 align-items-center">
+      <span class="status {{ 'st-ok' if o.status == 'entregue' else ('st-off' if o.status == 'cancelado' else ('st-late' if late else 'st-open')) }}">{{ o.status_label }}</span>
+      {% if late %}<span class="status st-late"><i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i> Atrasada</span>{% endif %}
+      {% if o.priority != 'normal' %}<span class="prio prio-{{ o.priority }}">Prioridade {{ o.priority_label|lower }}</span>{% endif %}
+      {% if o.blocked %}<span class="status st-part">Pendência: {{ o.blocked_reason }}</span>{% endif %}
+    </p>
+  </div>
+  <div class="d-flex gap-2">
+    <a class="btn btn-quiet" href="{{ url_for('encomendas.index') }}"><i class="bi bi-arrow-left"></i> Encomendas</a>
+    {% if o.is_open %}<a class="btn btn-outline-brand" href="{{ url_for('encomendas.edit', order_id=o.id) }}"><i class="bi bi-pencil"></i> Editar</a>{% endif %}
+  </div>
+</div>
+
+{% if o.status == 'cancelado' %}
+<div class="flash flash-warning mb-4"><i class="bi bi-slash-circle"></i><div>Cancelada em {{ o.canceled_at|data }}{% if o.canceled_by %} por {{ o.canceled_by.label }}{% endif %}. Motivo: {{ o.cancel_reason }}.</div></div>
+{% endif %}
+
+{% if o.is_open %}
+<section class="panel mb-4">
+  <div class="panel-body">
+    <ol class="stepper" aria-label="Etapas da encomenda">
+      {% for st, label in statuses.items() if st != 'cancelado' and (st != 'saiu' or o.delivery_mode != 'retirada') %}
+        {% set keys = statuses.keys()|list %}
+        <li class="{{ 'done' if keys.index(st) < keys.index(o.status) else ('current' if st == o.status else '') }}" {{ 'aria-current=step' if st == o.status }}>{{ label }}</li>
+      {% endfor %}
+    </ol>
+    <div class="d-flex flex-wrap gap-2 mt-3">
+      {% for st in o.allowed_next if st != 'cancelado' %}
+      <form method="post" action="{{ url_for('encomendas.status', order_id=o.id) }}" data-once>{{ csrf() }}<input type="hidden" name="to" value="{{ st }}">
+        {% set forward = statuses.keys()|list %}
+        <button class="btn {{ 'btn-brand' if forward.index(st) > forward.index(o.status) else 'btn-quiet' }}" type="submit"
+          {% if st == 'entregue' %}data-confirm="Confirmar a entrega de {{ o.code }}? Esta etapa é final.{% if o.pending > 0 %} O saldo de {{ o.pending|brl }} continuará a receber.{% endif %}"{% endif %}>
+          {{ ('Voltar para ' if forward.index(st) < forward.index(o.status) else '') ~ statuses[st] }}</button>
+      </form>
+      {% endfor %}
+    </div>
+    <p class="form-text mb-0 mt-2">Mudar a etapa não registra recebimento: pagamentos são lançados à parte.</p>
+  </div>
+</section>
+{% endif %}
+
+<div class="row g-4">
+  <div class="col-lg-7">
+    <section class="panel mb-4">
+      <div class="panel-body">
+        <div class="row g-3">
+          <div class="col-4"><div class="small-label">Total do pedido</div><div class="big-figure num text-start">{{ o.total|brl }}</div></div>
+          <div class="col-4"><div class="small-label">Recebido</div><div class="big-figure num text-start amount-in">{{ o.received|brl }}</div></div>
+          <div class="col-4"><div class="small-label">Saldo pendente</div><div class="big-figure num text-start {{ 'amount-out' if o.pending > 0 }}">{{ o.pending|brl }}</div></div>
+        </div>
+        {% if o.total > 0 and o.status != 'cancelado' %}<div class="progress-thin mt-3" role="img" aria-label="Percentual recebido"><span data-width="{{ ((o.received / o.total) * 100)|round(1) }}"></span></div>{% endif %}
+      </div>
+      <div class="panel-foot">
+        <dl class="kv">
+          <dt>Prazo</dt><dd class="{{ 'amount-out fw-semibold' if late }}">{{ o.due_date|data }}{% if o.due_time %} às {{ o.due_time.strftime('%H:%M') }}{% endif %}{% if late %} (atrasada){% endif %}</dd>
+          <dt>Modalidade</dt><dd>{{ o.delivery_label }}{% if o.delivery_person %} · {{ o.delivery_person }}{% endif %}</dd>
+          {% if o.delivery_mode == 'retirada' %}<dt>Retirada</dt><dd>{{ o.pickup_location or 'Local não informado' }}</dd>
+          {% else %}<dt>Endereço</dt><dd>{{ o.delivery_address }}</dd>{% endif %}
+          {% if o.delivered_at %}<dt>Entregue em</dt><dd>{{ o.delivered_at|data }}{% if o.delivery_notes %} · {{ o.delivery_notes }}{% endif %}</dd>{% endif %}
+          <dt>Pagamento</dt><dd>{{ o.payment_method.name if o.payment_method else '—' }}{% if o.balance_due_date %} · saldo vence {{ o.balance_due_date|data }}{% endif %}</dd>
+          <dt>Telefone</dt><dd>{{ o.customer_phone or '—' }}{% if o.contact_notes %} · {{ o.contact_notes }}{% endif %}</dd>
+          <dt>Financeiro</dt><dd>{% if o.sale %}<a href="{{ url_for('vendas.detail', sale_id=o.sale.id) }}">Venda #{{ o.sale.id }}</a> ({{ 'ativa' if o.sale.status == 'ativa' else 'cancelada' }}){% else %}Venda ainda não gerada (é criada na confirmação ou no primeiro pagamento){% endif %}</dd>
+        </dl>
+      </div>
+    </section>
+
+    <section class="panel mb-4">
+      <div class="panel-head"><h2 class="section-title">Itens</h2></div>
+      <div class="table-wrap"><table class="table-dl">
+        <thead><tr><th>Item</th><th class="num">Qtd.</th><th class="num">Unit.</th><th class="num">Desconto</th><th class="num">Subtotal</th></tr></thead>
+        <tbody>{% for i in o.items %}<tr><td>{{ i.description }}{% if i.customization %}<span class="sub">{{ i.customization }}</span>{% endif %}</td>
+          <td class="num">{{ i.quantity|num(0) if i.quantity == i.quantity|int else i.quantity|num(3) }}</td><td class="num">{{ i.unit_price|brl }}</td>
+          <td class="num">{{ i.discount|brl if i.discount else '—' }}</td><td class="num">{{ i.subtotal|brl }}</td></tr>{% endfor %}</tbody>
+        <tfoot>
+          {% if o.discount > 0 %}<tr><td colspan="4">Desconto no pedido</td><td class="num">− {{ o.discount|brl }}</td></tr>{% endif %}
+          <tr><td colspan="4">Total</td><td class="num">{{ o.total|brl }}</td></tr></tfoot>
+      </table></div>
+    </section>
+
+    {% if o.production_notes or o.customer_references or o.internal_notes %}
+    <section class="panel mb-4"><div class="panel-head"><h2 class="section-title">Produção e observações</h2></div><div class="panel-body">
+      <dl class="kv">
+        {% if o.production_notes %}<dt>Produção</dt><dd class="pre">{{ o.production_notes }}</dd>{% endif %}
+        {% if o.customer_references %}<dt>Referências</dt><dd class="pre">{{ o.customer_references }}</dd>{% endif %}
+        {% if o.internal_notes %}<dt>Internas</dt><dd class="pre">{{ o.internal_notes }}</dd>{% endif %}
+      </dl></div></section>
+    {% endif %}
+
+    <section class="panel">
+      <div class="panel-head"><h2 class="section-title">Histórico</h2><span class="small text-muted">Não pode ser editado</span></div>
+      <ol class="timeline">
+        {% for e in o.events|reverse %}
+        <li class="tl-{{ e.kind }}">
+          <div class="tl-when">{{ e.created_at|data }} · {{ e.author }}</div>
+          <div class="tl-what">{{ e.summary }}</div>
+          {% set ch = e.changes() %}
+          {% if ch %}<details class="tl-diff"><summary>{{ ch|length }} campo{{ 's' if ch|length != 1 }} alterado{{ 's' if ch|length != 1 }}</summary>
+            <table class="table-dl"><tbody>{% for k, b, a in ch %}<tr><td>{{ k }}</td><td class="text-muted text-decoration-line-through">{{ b }}</td><td>{{ a }}</td></tr>{% endfor %}</tbody></table></details>{% endif %}
+        </li>
+        {% endfor %}
+      </ol>
+    </section>
+  </div>
+
+  <div class="col-lg-5">
+    {% if o.status != 'cancelado' and (o.pending > 0 or not o.sale) %}
+    <section class="panel mb-4">
+      <div class="panel-head"><h2 class="section-title">Registrar pagamento</h2></div>
+      <div class="panel-body">
+        <form method="post" action="{{ url_for('encomendas.pagamento', order_id=o.id) }}" data-once>{{ csrf() }}{{ reqkey() }}
+          <div class="row g-2">
+            <div class="col-sm-6">{{ money_field('amount', 'Valor', o.pending|money_input, required=True, id='pay-amount') }}</div>
+            <div class="col-sm-6"><label class="form-label" for="pay-date">Data</label><input class="form-control" type="date" id="pay-date" name="date" value="{{ today.isoformat() }}" required></div>
+            <div class="col-sm-6"><label class="form-label" for="pay-acc">Conta</label><select class="form-select" id="pay-acc" name="account_id" required>{{ select_opts(accounts, accounts[0].id if accounts else '', 'Escolha a conta') }}</select></div>
+            <div class="col-sm-6"><label class="form-label" for="pay-pm">Forma</label><select class="form-select" id="pay-pm" name="method_id">{{ select_opts(methods, o.payment_method_id, '—') }}</select></div>
+            <div class="col-12"><label class="form-label" for="pay-notes">Observação</label><input class="form-control" id="pay-notes" name="notes" maxlength="300" placeholder="Ex.: sinal de 50%"></div>
+          </div>
+          <button class="btn btn-pos mt-3" type="submit"><i class="bi bi-check2-circle"></i> Registrar pagamento</button>
+          <p class="form-text mt-2 mb-0">Entra no caixa e no financeiro como recebimento da venda {{ ('#' ~ o.sale.id) if o.sale else 'vinculada (criada agora)' }}. Pagamento parcial ou antecipado é aceito.</p>
+        </form>
+      </div>
+    </section>
+    {% endif %}
+
+    {% if o.sale %}
+    <section class="panel mb-4">
+      <div class="panel-head"><h2 class="section-title">Pagamentos</h2></div>
+      <div class="table-wrap"><table class="table-dl"><thead><tr><th>Data</th><th>Tipo</th><th class="num">Valor</th></tr></thead><tbody>
+        {% for t in o.sale.titles %}{% for s in t.settlements %}
+          <tr class="{{ 'muted-row' if s.reversal }}"><td>{{ s.date|data }}</td>
+            <td><a class="row-link" href="{{ url_for('titulos.detail', title_id=t.id) }}">{{ 'Estorno / reembolso' if s.is_reversal else 'Recebimento' }}</a><span class="sub">{{ s.account.name }}{% if s.created_by %} · {{ s.created_by.label }}{% endif %}</span></td>
+            <td class="num">{{ (-s.amount if s.is_reversal else s.amount)|brl }}</td></tr>
+        {% endfor %}{% else %}<tr><td colspan="3" class="text-muted">Nenhum pagamento.</td></tr>{% endfor %}
+      </tbody></table></div>
+      <div class="panel-foot small">Para estornar um pagamento, abra-o na lista acima.</div>
+    </section>
+    {% endif %}
+
+    {% if o.is_open %}
+    <section class="panel mb-4">
+      <div class="panel-head"><h2 class="section-title">Pendência ou bloqueio</h2></div>
+      <div class="panel-body">
+        <form method="post" action="{{ url_for('encomendas.pendencia', order_id=o.id) }}" class="d-flex gap-2 flex-wrap">{{ csrf() }}
+          {% if o.blocked %}<input type="hidden" name="blocked" value="">
+            <span class="flex-grow-1">{{ o.blocked_reason }}</span><button class="btn btn-quiet" type="submit">Marcar como resolvida</button>
+          {% else %}<input type="hidden" name="blocked" value="1">
+            <input class="form-control flex-grow-1 w-auto" name="reason" maxlength="300" placeholder="Ex.: aguardando foto de referência" aria-label="Pendência">
+            <button class="btn btn-quiet" type="submit">Marcar pendência</button>{% endif %}
+        </form>
+        <p class="form-text mb-0 mt-2">A pendência aparece no cartão e nos alertas sem mudar a etapa.</p>
+      </div>
+    </section>
+    <section class="panel">
+      <div class="panel-head"><h2 class="section-title">Cancelar encomenda</h2></div>
+      <div class="panel-body">
+        <form method="post" action="{{ url_for('encomendas.cancelar', order_id=o.id) }}" data-once>{{ csrf() }}
+          <label class="form-label" for="c-reason">Motivo</label>
+          <input class="form-control mb-2" id="c-reason" name="reason" required maxlength="300">
+          {% if o.received > 0 %}
+          <div class="form-check mb-2"><input class="form-check-input" type="checkbox" id="c-refund" name="refund" value="1" required>
+            <label class="form-check-label" for="c-refund">Registrar o reembolso dos {{ o.received|brl }} recebidos (estorno no financeiro)</label></div>
+          <label class="form-label" for="c-date">Data do reembolso</label>
+          <input class="form-control mb-2" type="date" id="c-date" name="refund_date" value="{{ today.isoformat() }}">
+          {% endif %}
+          <button class="btn btn-outline-danger" type="submit" data-confirm="Cancelar a encomenda {{ o.code }}? Ela sai do backlog e não poderá ser reaberta.">Cancelar encomenda</button>
+          <p class="form-text mt-2 mb-0">Os registros financeiros são mantidos: recebimentos e estornos continuam no histórico.</p>
+        </form>
+      </div>
+    </section>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

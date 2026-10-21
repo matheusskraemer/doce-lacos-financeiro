@@ -11,10 +11,11 @@ from ..utils import ValidationError, parse_date, parse_money, today
 
 
 def register_views(app: Flask) -> None:
-    from . import (brand, config_views, contas, dashboard, despesas, fluxo, produtos, relatorios, titulos, vendas)
+    from . import (brand, config_views, contas, dashboard, despesas, encomendas, fluxo, produtos, relatorios, titulos,
+                   vendas)
 
     protected = set()
-    for mod in (dashboard, vendas, despesas, produtos, contas, titulos, fluxo, relatorios, config_views):
+    for mod in (dashboard, encomendas, vendas, despesas, produtos, contas, titulos, fluxo, relatorios, config_views):
         app.register_blueprint(mod.bp)
         protected.add(mod.bp.name)
     app.register_blueprint(brand.bp)

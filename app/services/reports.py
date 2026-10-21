@@ -63,6 +63,12 @@ CATALOG = [
     ("comparativo", "Comparativo entre meses", "Dois meses lado a lado."),
     ("movimentacoes", "Histórico de movimentações", "Liquidações, estornos e transferências."),
     ("resultado", "Resultado financeiro", "Resultado de caixa e visão gerencial por competência."),
+    ("enc_recebidas", "Encomendas recebidas", "Pedidos que entraram no período, com valor, recebido e saldo."),
+    ("enc_entregues", "Encomendas entregues", "Pedidos entregues no período e tempo até a entrega."),
+    ("enc_canceladas", "Encomendas canceladas", "Pedidos cancelados no período, motivo e reembolso."),
+    ("enc_atrasadas", "Encomendas atrasadas", "Pedidos em aberto com prazo vencido agora."),
+    ("enc_resumo", "Resumo das encomendas", "Quantidades, prazo médio de conclusão, valor dos pedidos x recebido."),
+    ("enc_produtos", "Produtos mais pedidos", "Itens mais solicitados nas encomendas do período."),
 ]
 CATALOG_KEYS = {k for k, _, _ in CATALOG}
 
@@ -301,7 +307,142 @@ def build(key: str, flt: Filters) -> Report:
                       ["O resultado de caixa mostra quanto o dinheiro disponível aumentou ou diminuiu.",
                        "O resultado gerencial simplificado considera as compras de mercadorias do período inteiras, "
                        "não o custo das mercadorias vendidas, nem tributos sobre o lucro. Não é lucro contábil."])
+    if key.startswith("enc_"):
+        return _orders_report(key, title, desc, flt)
     raise KeyError(key)
+
+
+def _orders_report(key: str, title: str, desc: str, flt: Filters) -> Report:
+    from datetime import datetime, time, timedelta
+    from collections import defaultdict
+
+    from ..models import ORDER_OPEN_STATUSES, ORDER_STATUS_LABELS, Order, OrderItem
+    from . import orders as osvc
+
+    tz = osvc.TZ
+    lo = datetime.combine(flt.start, time.min, tzinfo=tz)
+    hi = datetime.combine(flt.end + timedelta(days=1), time.min, tzinfo=tz)
+    now = osvc.now_local()
+    money_cols = [Column("total", "Valor do pedido", "money"), Column("received", "Recebido", "money"),
+                  Column("pending", "Saldo pendente", "money")]
+
+    def base_row(o):
+        return {"code": o.code, "customer": o.customer_name, "entry": o.created_at, "due": o.due_date,
+                "status": o.status_label, "total": o.total, "received": o.received, "pending": o.pending,
+                "_url": ("encomendas.detail", {"order_id": o.id}), "_muted": o.status == "cancelado"}
+
+    def search(stmt):
+        if flt.search:
+            like = f"%{flt.search}%"
+            stmt = stmt.where(or_(Order.customer_name.ilike(like),
+                                  Order.id.in_(select(OrderItem.order_id).where(OrderItem.description.ilike(like)))))
+        return stmt
+
+    def totals(rows, keys=("total", "received", "pending")):
+        return {k: q(sum((r[k] for r in rows if not r.get("_muted")), ZERO)) for k in keys}
+
+    note_money = ("Valor do pedido não é dinheiro recebido: o recebido vem dos pagamentos registrados no "
+                  "financeiro (já descontados estornos). Nenhum destes valores é lucro.")
+    if key == "enc_recebidas":
+        stmt = search(select(Order).where(Order.created_at >= lo, Order.created_at < hi).order_by(Order.created_at))
+        if flt.status:
+            stmt = stmt.where(Order.status == flt.status)
+        rows = [base_row(o) for o in db.session.scalars(stmt)]
+        return Report(key, title, desc, [Column("code", "Encomenda"), Column("customer", "Cliente"),
+                                         Column("entry", "Entrada", "date"), Column("due", "Prazo", "date"),
+                                         Column("status", "Status")] + money_cols,
+                      rows, totals(rows), [note_money, "Canceladas aparecem riscadas e não entram nos totais."])
+    if key == "enc_entregues":
+        stmt = search(select(Order).where(Order.status == "entregue", Order.delivered_at >= lo, Order.delivered_at < hi)
+                      .order_by(Order.delivered_at))
+        rows = []
+        for o in db.session.scalars(stmt):
+            r = base_row(o)
+            r["delivered"] = o.delivered_at
+            r["days"] = (o.delivered_at - o.created_at).days
+            r["on_time"] = "Sim" if o.delivered_at.astimezone(tz) <= o.due_at(tz) else "Não"
+            rows.append(r)
+        return Report(key, title, desc, [Column("code", "Encomenda"), Column("customer", "Cliente"),
+                                         Column("due", "Prazo", "date"), Column("delivered", "Entregue em", "date"),
+                                         Column("days", "Dias até entregar"), Column("on_time", "No prazo?")]
+                      + money_cols, rows, totals(rows), [note_money])
+    if key == "enc_canceladas":
+        stmt = search(select(Order).where(Order.status == "cancelado", Order.canceled_at >= lo, Order.canceled_at < hi)
+                      .order_by(Order.canceled_at))
+        rows = []
+        for o in db.session.scalars(stmt):
+            refunded = q(sum((s.amount for t in (o.sale.titles if o.sale else []) for s in t.settlements
+                              if s.is_reversal), ZERO))
+            rows.append({"code": o.code, "customer": o.customer_name, "canceled": o.canceled_at,
+                         "reason": o.cancel_reason or "", "by": o.canceled_by.label if o.canceled_by else "—",
+                         "total": o.total, "refunded": refunded, "_url": ("encomendas.detail", {"order_id": o.id})})
+        return Report(key, title, desc, [Column("code", "Encomenda"), Column("customer", "Cliente"),
+                                         Column("canceled", "Cancelada em", "date"), Column("reason", "Motivo"),
+                                         Column("by", "Cancelada por"), Column("total", "Valor do pedido", "money"),
+                                         Column("refunded", "Reembolsado", "money")],
+                      rows, {"total": q(sum((r["total"] for r in rows), ZERO)),
+                             "refunded": q(sum((r["refunded"] for r in rows), ZERO))}, [])
+    if key == "enc_atrasadas":
+        stmt = search(select(Order).where(Order.status.in_(ORDER_OPEN_STATUSES)).order_by(Order.due_date))
+        rows = []
+        for o in db.session.scalars(stmt):
+            if not o.is_late(now):
+                continue
+            r = base_row(o)
+            r["late"] = (now.date() - o.due_date).days
+            r["priority"] = o.priority_label
+            rows.append(r)
+        return Report(key, title, desc, [Column("code", "Encomenda"), Column("customer", "Cliente"),
+                                         Column("due", "Prazo", "date"), Column("late", "Dias de atraso"),
+                                         Column("status", "Status"), Column("priority", "Prioridade")] + money_cols,
+                      rows, totals(rows), ["Situação atual (não depende do período escolhido)."])
+    if key == "enc_resumo":
+        entered = db.session.scalars(search(select(Order).where(Order.created_at >= lo, Order.created_at < hi))).all()
+        delivered = db.session.scalars(select(Order).where(Order.status == "entregue", Order.delivered_at >= lo,
+                                                           Order.delivered_at < hi)).all()
+        canceled = [o for o in entered if o.status == "cancelado"]
+        valid = [o for o in entered if o.status != "cancelado"]
+        durations = [(o.delivered_at - o.created_at).total_seconds() / 86400 for o in delivered]
+        avg = f"{sum(durations) / len(durations):.1f} dias".replace(".", ",") if len(durations) >= 3 else \
+            "Dados insuficientes (menos de 3 entregas)"
+        on_time = sum(1 for o in delivered if o.delivered_at.astimezone(tz) <= o.due_at(tz))
+        rows = [
+            {"metric": "Encomendas recebidas no período", "value": str(len(entered))},
+            {"metric": "Entregues no período", "value": str(len(delivered))},
+            {"metric": "Entregues no prazo", "value": f"{on_time} de {len(delivered)}" if delivered else "—"},
+            {"metric": "Canceladas (das recebidas no período)", "value": str(len(canceled))},
+            {"metric": "Prazo médio de conclusão (entrada → entrega)", "value": avg},
+            {"metric": "Valor dos pedidos recebidos (sem cancelados)", "value": brl_text(sum((o.total for o in valid), ZERO))},
+            {"metric": "Já recebido desses pedidos", "value": brl_text(sum((o.received for o in valid), ZERO))},
+            {"metric": "Saldo pendente desses pedidos", "value": brl_text(sum((o.pending for o in valid), ZERO))},
+        ]
+        return Report(key, title, desc, [Column("metric", "Indicador"), Column("value", "Valor")], rows, {},
+                      [note_money])
+    if key == "enc_produtos":
+        stmt = (select(OrderItem, Order).join(Order, Order.id == OrderItem.order_id)
+                .where(Order.created_at >= lo, Order.created_at < hi, Order.status != "cancelado"))
+        agg = defaultdict(lambda: {"qty": 0, "orders": set(), "value": ZERO, "name": ""})
+        for it, o in db.session.execute(stmt):
+            k = ("p", it.product_id) if it.product_id else ("d", it.description.strip().lower())
+            a = agg[k]
+            a["name"] = it.product.name if it.product else it.description
+            a["qty"] += it.quantity
+            a["orders"].add(o.id)
+            a["value"] += it.subtotal
+        rows = sorted(({"product": a["name"], "qty": f"{a['qty'].normalize():f}".replace(".", ","),
+                        "orders": len(a["orders"]), "value": q(a["value"]), "_q": a["qty"]} for a in agg.values()),
+                      key=lambda r: r["_q"], reverse=True)
+        return Report(key, title, desc, [Column("product", "Produto"), Column("qty", "Quantidade"),
+                                         Column("orders", "Encomendas"), Column("value", "Valor nos pedidos", "money")],
+                      rows, {"value": q(sum((r["value"] for r in rows), ZERO))},
+                      ["Itens cadastrados como produto são somados juntos; itens descritos à mão são agrupados pela "
+                       "descrição. Encomendas canceladas ficam de fora."])
+    raise KeyError(key)
+
+
+def brl_text(v):
+    from ..utils import brl
+    return brl(v)
 
 
 # --------------------------------------------------------------------------- exportação

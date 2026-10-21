@@ -16,9 +16,19 @@ from app.utils import today
 @pytest.fixture(scope="session")
 def app():
     app = create_app("testing")
+
+    # Nos testes, as requisições reaproveitam o contexto da aplicação aberto pela fixture;
+    # sem isto, o usuário carregado numa requisição "vazaria" para a próxima (de outro cliente).
+    from flask import g
+    app.before_request_funcs.setdefault(None, []).insert(0, lambda: g.pop("_login_user", None) and None)
     with app.app_context():
         db.drop_all()
+        db.session.execute(text("DROP SEQUENCE IF EXISTS order_number_seq"))
+        db.session.commit()
         db.create_all()
+        from app.services.audit import install_history_guard
+        with db.engine.begin() as conn:
+            install_history_guard(conn)
     yield app
     with app.app_context():
         db.session.remove()
@@ -30,6 +40,7 @@ def clean(app):
     with app.app_context():
         tables = ", ".join(t.name for t in reversed(db.metadata.sorted_tables))
         db.session.execute(text(f"TRUNCATE {tables} RESTART IDENTITY CASCADE"))
+        db.session.execute(text("ALTER SEQUENCE order_number_seq RESTART WITH 1"))
         db.session.commit()
         seed_defaults()
         yield

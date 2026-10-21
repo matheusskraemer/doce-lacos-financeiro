@@ -15,7 +15,7 @@ Conceitos centrais
 from __future__ import annotations
 
 import uuid
-from datetime import date, datetime, timezone
+from datetime import date, datetime, time, timezone
 from decimal import Decimal
 
 from flask_login import UserMixin
@@ -28,8 +28,10 @@ from sqlalchemy import (
     Integer,
     LargeBinary,
     Numeric,
+    Sequence,
     String,
     Text,
+    Time,
     UniqueConstraint,
     case,
     func,
@@ -69,6 +71,17 @@ class User(UserMixin, db.Model):
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     password_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true", nullable=False)
+    created_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    deactivated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    @property
+    def label(self) -> str:
+        return self.display_name or self.username
+
+    @property
+    def is_active(self) -> bool:  # Flask-Login: usuário desativado não autentica
+        return bool(self.active)
 
     def set_password(self, password: str) -> None:
         self.password_hash = generate_password_hash(password, method="scrypt")
@@ -99,10 +112,31 @@ class AuditLog(db.Model):
     id: Mapped[int] = mapped_column(primary_key=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
     user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    # Nome do autor gravado no próprio registro: o histórico continua legível
+    # mesmo que o usuário seja desativado ou renomeado.
+    username: Mapped[str | None] = mapped_column(String(120))
     action: Mapped[str] = mapped_column(String(40))
-    entity: Mapped[str] = mapped_column(String(40))
-    entity_id: Mapped[int | None] = mapped_column(Integer)
+    entity: Mapped[str] = mapped_column(String(40), index=True)
+    entity_id: Mapped[int | None] = mapped_column(Integer, index=True)
     summary: Mapped[str] = mapped_column(Text, default="")
+    before: Mapped[str | None] = mapped_column(Text)  # JSON
+    after: Mapped[str | None] = mapped_column(Text)  # JSON
+
+    user = relationship("User")
+
+    @property
+    def author(self) -> str:
+        return self.username or (self.user.label if self.user else "Sistema")
+
+    def changes(self) -> list[tuple[str, str, str]]:
+        import json
+        try:
+            b = json.loads(self.before) if self.before else {}
+            a = json.loads(self.after) if self.after else {}
+        except ValueError:
+            return []
+        keys = list(dict.fromkeys(list(b) + list(a)))
+        return [(k, str(b.get(k, "—")), str(a.get(k, "—"))) for k in keys if b.get(k) != a.get(k)]
 
 
 # --------------------------------------------------------------------------- #
@@ -124,6 +158,7 @@ class CompanySettings(db.Model):
     logo_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     projection_days: Mapped[int] = mapped_column(Integer, default=30)
     upcoming_days: Mapped[int] = mapped_column(Integer, default=7)
+    order_alert_days: Mapped[int] = mapped_column(Integer, default=2, server_default="2", nullable=False)
     default_period: Mapped[str] = mapped_column(String(20), default="mes_atual")
     last_backup_download_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
@@ -229,7 +264,12 @@ class Sale(db.Model):
     canceled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     cancel_reason: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    canceled_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
 
+    created_by = relationship("User", foreign_keys="Sale.created_by_id")
+    canceled_by = relationship("User", foreign_keys="Sale.canceled_by_id")
+    order = relationship("Order", back_populates="sale", uselist=False)
     items = relationship("SaleItem", back_populates="sale", cascade="all, delete-orphan", order_by="SaleItem.id")
     titles = relationship("Title", back_populates="sale", order_by="Title.installment_no")
     payment_method = relationship("PaymentMethod")
@@ -289,7 +329,11 @@ class Purchase(db.Model):
     canceled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     cancel_reason: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    canceled_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
 
+    created_by = relationship("User", foreign_keys="Purchase.created_by_id")
+    canceled_by = relationship("User", foreign_keys="Purchase.canceled_by_id")
     items = relationship("PurchaseItem", back_populates="purchase", cascade="all, delete-orphan", order_by="PurchaseItem.id")
     titles = relationship("Title", back_populates="purchase", order_by="Title.installment_no")
 
@@ -355,7 +399,9 @@ class Settlement(db.Model):
     reverses_id: Mapped[int | None] = mapped_column(ForeignKey("settlements.id"), unique=True)
     notes: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
 
+    created_by = relationship("User", foreign_keys=[created_by_id])
     title = relationship("Title", back_populates="settlements")
     account = relationship("Account")
     payment_method = relationship("PaymentMethod")
@@ -406,9 +452,13 @@ class Title(db.Model):
     canceled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     cancel_reason: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    canceled_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
     category = relationship("Category")
+    created_by = relationship("User", foreign_keys="Title.created_by_id")
+    canceled_by = relationship("User", foreign_keys="Title.canceled_by_id")
     expected_method = relationship("PaymentMethod")
     expected_account = relationship("Account")
     sale = relationship("Sale", back_populates="titles")
@@ -479,9 +529,243 @@ class Transfer(db.Model):
     notes: Mapped[str | None] = mapped_column(Text)
     reverses_id: Mapped[int | None] = mapped_column(ForeignKey("transfers.id"), unique=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+
+    created_by = relationship("User", foreign_keys=[created_by_id])
 
     from_account = relationship("Account", foreign_keys=[from_account_id])
     to_account = relationship("Account", foreign_keys=[to_account_id])
     reverses = relationship("Transfer", remote_side="Transfer.id", foreign_keys=[reverses_id], back_populates="reversal")
     reversal = relationship("Transfer", foreign_keys=[reverses_id], back_populates="reverses", uselist=False)
 
+
+
+# --------------------------------------------------------------------------- #
+# Encomendas
+# --------------------------------------------------------------------------- #
+ORDER_STATUSES = [
+    # (chave, rótulo, aberta?)  — para adaptar as etapas, edite esta lista e ORDER_TRANSITIONS.
+    ("novo", "Novo pedido", True),
+    ("aguardando", "Aguardando confirmação", True),
+    ("confirmado", "Confirmado", True),
+    ("producao", "Em produção", True),
+    ("pronto", "Pronto para entrega", True),
+    ("saiu", "Saiu para entrega", True),
+    ("entregue", "Entregue", False),
+    ("cancelado", "Cancelado", False),
+]
+ORDER_STATUS_LABELS = {k: label for k, label, _ in ORDER_STATUSES}
+ORDER_OPEN_STATUSES = tuple(k for k, _, is_open in ORDER_STATUSES if is_open)
+ORDER_TRANSITIONS = {
+    "novo": ("aguardando", "confirmado", "cancelado"),
+    "aguardando": ("novo", "confirmado", "cancelado"),
+    "confirmado": ("aguardando", "producao", "pronto", "cancelado"),
+    "producao": ("confirmado", "pronto", "cancelado"),
+    "pronto": ("producao", "saiu", "entregue", "cancelado"),
+    "saiu": ("pronto", "entregue", "cancelado"),
+    "entregue": (),
+    "cancelado": (),
+}
+ORDER_CHANNELS = {"whatsapp": "WhatsApp", "instagram": "Instagram", "loja": "Loja física", "indicacao": "Indicação",
+                  "site": "Site", "outro": "Outro"}
+ORDER_PRIORITIES = {"normal": "Normal", "alta": "Alta", "urgente": "Urgente"}
+PRIORITY_RANK = {"urgente": 0, "alta": 1, "normal": 2}
+DELIVERY_MODES = {"retirada": "Retirada", "entrega": "Entrega própria", "transportadora": "Transportadora"}
+
+order_number_seq = Sequence("order_number_seq", start=1)
+
+
+class Order(db.Model):
+    __tablename__ = "orders"
+    __table_args__ = (
+        CheckConstraint("discount >= 0", name="ck_order_discount"),
+        CheckConstraint("priority in ('normal','alta','urgente')", name="ck_order_priority"),
+        CheckConstraint("delivery_mode in ('retirada','entrega','transportadora')", name="ck_order_delivery_mode"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    number: Mapped[int] = mapped_column(Integer, order_number_seq, server_default=order_number_seq.next_value(),
+                                        unique=True, nullable=False)
+    request_key: Mapped[str | None] = mapped_column(String(64), unique=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False, index=True)
+    created_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+    channel: Mapped[str] = mapped_column(String(20), default="whatsapp", nullable=False)
+    status: Mapped[str] = mapped_column(String(20), default="novo", nullable=False, index=True)
+    status_changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    priority: Mapped[str] = mapped_column(String(10), default="normal", nullable=False)
+    blocked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    blocked_reason: Mapped[str | None] = mapped_column(String(300))
+
+    customer_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    customer_phone: Mapped[str | None] = mapped_column(String(40))
+    contact_notes: Mapped[str | None] = mapped_column(Text)
+
+    due_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    due_time: Mapped[time | None] = mapped_column(Time)
+    delivery_mode: Mapped[str] = mapped_column(String(20), default="retirada", nullable=False)
+    delivery_address: Mapped[str | None] = mapped_column(Text)
+    pickup_location: Mapped[str | None] = mapped_column(String(200))
+    delivery_person: Mapped[str | None] = mapped_column(String(120))
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    delivery_notes: Mapped[str | None] = mapped_column(Text)
+
+    discount: Mapped[Decimal] = mapped_column(MONEY, default=ZERO, nullable=False)
+    payment_method_id: Mapped[int | None] = mapped_column(ForeignKey("payment_methods.id"))
+    balance_due_date: Mapped[date | None] = mapped_column(Date)
+
+    production_notes: Mapped[str | None] = mapped_column(Text)
+    customer_references: Mapped[str | None] = mapped_column(Text)
+    internal_notes: Mapped[str | None] = mapped_column(Text)
+
+    sale_id: Mapped[int | None] = mapped_column(ForeignKey("sales.id"), unique=True)
+    canceled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    cancel_reason: Mapped[str | None] = mapped_column(Text)
+    canceled_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+
+    items = relationship("OrderItem", back_populates="order", cascade="all, delete-orphan", order_by="OrderItem.id")
+    events = relationship("OrderEvent", back_populates="order", order_by="OrderEvent.id")
+    sale = relationship("Sale", back_populates="order")
+    payment_method = relationship("PaymentMethod")
+    created_by = relationship("User", foreign_keys=[created_by_id])
+    canceled_by = relationship("User", foreign_keys=[canceled_by_id])
+
+    # ------------------------------------------------------------------ valores
+    @property
+    def code(self) -> str:
+        return f"DL-{self.number:04d}"
+
+    @property
+    def gross(self) -> Decimal:
+        return q(sum((i.gross for i in self.items), ZERO))
+
+    @property
+    def items_discount(self) -> Decimal:
+        return q(sum((i.discount for i in self.items), ZERO))
+
+    @property
+    def total_discount(self) -> Decimal:
+        return q(self.items_discount + (self.discount or ZERO))
+
+    @property
+    def total(self) -> Decimal:
+        return q(self.gross - self.total_discount)
+
+    @property
+    def received(self) -> Decimal:
+        """Recebido líquido (liquidações − estornos) da venda vinculada."""
+        if not self.sale:
+            return ZERO
+        return q(sum((t.settled_amount for t in self.sale.titles), ZERO))
+
+    @property
+    def pending(self) -> Decimal:
+        if self.status == "cancelado":
+            return ZERO
+        if self.sale and self.sale.status == "ativa":
+            return q(sum((t.open_amount for t in self.sale.titles), ZERO))
+        return q(self.total - self.received)
+
+    @property
+    def payment_status(self) -> str:
+        if self.status == "cancelado":
+            return "cancelado"
+        if self.total > 0 and self.pending <= 0:
+            return "pago"
+        if self.received > 0:
+            return "parcial"
+        return "a_receber"
+
+    # ------------------------------------------------------------------ prazos
+    @property
+    def is_open(self) -> bool:
+        return self.status in ORDER_OPEN_STATUSES
+
+    def due_at(self, tz) -> datetime:
+        t = self.due_time or time(23, 59, 59)
+        return datetime.combine(self.due_date, t, tzinfo=tz)
+
+    def is_late(self, now: datetime) -> bool:
+        return self.is_open and now > self.due_at(now.tzinfo)
+
+    def days_left(self, today_: date) -> int:
+        return (self.due_date - today_).days
+
+    @property
+    def status_label(self) -> str:
+        return ORDER_STATUS_LABELS.get(self.status, self.status)
+
+    @property
+    def channel_label(self) -> str:
+        return ORDER_CHANNELS.get(self.channel, self.channel)
+
+    @property
+    def priority_label(self) -> str:
+        return ORDER_PRIORITIES.get(self.priority, self.priority)
+
+    @property
+    def delivery_label(self) -> str:
+        return DELIVERY_MODES.get(self.delivery_mode, self.delivery_mode)
+
+    @property
+    def allowed_next(self) -> tuple[str, ...]:
+        nxt = ORDER_TRANSITIONS.get(self.status, ())
+        if self.delivery_mode == "retirada":
+            nxt = tuple(s for s in nxt if s != "saiu")
+        return nxt
+
+
+class OrderItem(db.Model):
+    __tablename__ = "order_items"
+    __table_args__ = (
+        CheckConstraint("quantity > 0", name="ck_order_item_qty"),
+        CheckConstraint("unit_price >= 0", name="ck_order_item_price"),
+        CheckConstraint("discount >= 0", name="ck_order_item_discount"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    order_id: Mapped[int] = mapped_column(ForeignKey("orders.id", ondelete="CASCADE"), nullable=False, index=True)
+    product_id: Mapped[int | None] = mapped_column(ForeignKey("products.id"))
+    description: Mapped[str] = mapped_column(String(160), nullable=False)
+    customization: Mapped[str | None] = mapped_column(Text)
+    quantity: Mapped[Decimal] = mapped_column(QTY, nullable=False)
+    unit_price: Mapped[Decimal] = mapped_column(MONEY, nullable=False)
+    discount: Mapped[Decimal] = mapped_column(MONEY, default=ZERO, nullable=False)
+    notes: Mapped[str | None] = mapped_column(Text)
+
+    order = relationship("Order", back_populates="items")
+    product = relationship("Product")
+
+    @property
+    def gross(self) -> Decimal:
+        return q(self.quantity * self.unit_price)
+
+    @property
+    def subtotal(self) -> Decimal:
+        return q(self.gross - (self.discount or ZERO))
+
+
+class OrderEvent(db.Model):
+    """Histórico da encomenda (somente inclusão)."""
+
+    __tablename__ = "order_events"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    order_id: Mapped[int] = mapped_column(ForeignKey("orders.id"), nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    username: Mapped[str | None] = mapped_column(String(120))
+    kind: Mapped[str] = mapped_column(String(20), nullable=False)
+    from_status: Mapped[str | None] = mapped_column(String(20))
+    to_status: Mapped[str | None] = mapped_column(String(20))
+    summary: Mapped[str] = mapped_column(Text, default="")
+    before: Mapped[str | None] = mapped_column(Text)
+    after: Mapped[str | None] = mapped_column(Text)
+
+    order = relationship("Order", back_populates="events")
+
+    @property
+    def author(self) -> str:
+        return self.username or "Sistema"
+
+    changes = AuditLog.changes

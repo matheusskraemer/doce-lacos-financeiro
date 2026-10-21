@@ -4,11 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
   <title>{% block title %}{{ page_title|default('Financeiro') }}{% endblock %} · {{ company.company_name if company else 'Doce Laços' }}</title>
   <link rel="icon" href="{{ url_for('brand.logo') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='vendor/bootstrap/bootstrap.min.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='vendor/icons/bootstrap-icons.min.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v=1">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v=2">
   <link rel="stylesheet" href="{{ url_for('brand.brand_css') }}">
 </head>
 <body>
@@ -29,6 +30,11 @@
         <a href="{{ url_for('dashboard.index') }}" class="{{ 'active' if ep == 'dashboard.index' }}"><i class="bi bi-house"></i> Visão geral</a>
       </div>
       <div class="nav-group">
+        <div class="nav-group-label">Operação</div>
+        <a href="{{ url_for('encomendas.index') }}" class="{{ 'active' if ep.startswith('encomendas.') }}"><i class="bi bi-kanban"></i> Encomendas
+          {% if order_attention %}<span class="nav-badge" title="Encomendas atrasadas ou aguardando confirmação">{{ order_attention }}<span class="visually-hidden"> precisam de atenção</span></span>{% endif %}</a>
+      </div>
+      <div class="nav-group">
         <div class="nav-group-label">Movimento</div>
         <a href="{{ url_for('vendas.index') }}" class="{{ 'active' if ep.startswith('vendas.') }}"><i class="bi bi-bag-heart"></i> Vendas e receitas</a>
         <a href="{{ url_for('despesas.index') }}" class="{{ 'active' if ep.startswith('despesas.') }}"><i class="bi bi-receipt"></i> Despesas</a>
@@ -47,7 +53,7 @@
       </div>
     </nav>
     <div class="sidebar-foot">
-      <div class="mb-1">{{ current_user.display_name or current_user.username }}</div>
+      <div class="mb-1">{{ current_user.label }}</div>
       <form method="post" action="{{ url_for('auth.logout') }}">{{ csrf() }}
         <button class="btn btn-link btn-sm text-decoration-none" type="submit"><i class="bi bi-box-arrow-left"></i> Sair</button>
       </form>
@@ -91,7 +97,7 @@
 </div>
 {% endblock %}
 <script src="{{ url_for('static', filename='vendor/bootstrap/bootstrap.bundle.min.js') }}"></script>
+<script src="{{ url_for('static', filename='js/app.js') }}?v=2"></script>
 {% block scripts %}{% endblock %}
-<script src="{{ url_for('static', filename='js/app.js') }}?v=1"></script>
 </body>
 </html>

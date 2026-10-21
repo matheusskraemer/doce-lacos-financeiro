@@ -43,6 +43,18 @@
   </div>
 </section>
 
+{% if order_alerts %}
+<section class="panel mb-4" aria-labelledby="dash-orders">
+  <div class="panel-head"><h2 class="section-title" id="dash-orders"><i class="bi bi-kanban" aria-hidden="true"></i> Encomendas que precisam de atenção</h2><a class="small" href="{{ url_for('encomendas.index') }}">Abrir encomendas</a></div>
+  <ul class="alert-list">
+    {% for a in order_alerts[:5] %}
+    <li class="alert-{{ a.kind }}"><span class="alert-tag">{{ {'atrasada':'Atrasada','proxima':'Prazo próximo','confirmacao':'Confirmar','pronta':'Pronta','saldo':'Saldo','pendencia':'Pendência'}[a.kind] }}</span>
+      <a class="fw-semibold" href="{{ url_for('encomendas.detail', order_id=a.order.id) }}">{{ a.order.code }} · {{ a.order.customer_name }}</a><span class="text-muted">{{ a.label }}</span></li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+
 <section class="metrics mb-4" aria-label="Indicadores do período">
   <a class="metric" href="{{ url_for('vendas.index', periodo=period.key, inicio=period.start, fim=period.end) }}">
     <span class="label">Vendas no período</span>

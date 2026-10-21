@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% from "_macros.html" import empty %}
+{% set page_title = "Encomendas" %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1 class="page-title">Encomendas</h1>
+    <p class="page-sub">{{ m.open }} em aberto, somando {{ m.open_value|brl }} em pedidos · {{ m.pending_value|brl }} ainda a receber.</p>
+  </div>
+  <a class="btn btn-brand" href="{{ url_for('encomendas.new') }}"><i class="bi bi-plus-lg"></i> Nova encomenda</a>
+</div>
+
+<section class="metrics metrics-6 mb-4" aria-label="Indicadores das encomendas">
+  <a class="metric" href="{{ url_for('encomendas.index', ver='tabela', status='abertas') }}"><span class="label">Em aberto</span><span class="value">{{ m.open }}</span><span class="hint">{{ m.new }} nova{{ 's' if m.new != 1 }} · {{ m.waiting }} aguardando</span></a>
+  <a class="metric" href="{{ url_for('encomendas.index', ver='tabela', status='producao') }}"><span class="label">Em produção</span><span class="value">{{ m.production }}</span><span class="hint">Sendo preparadas</span></a>
+  <a class="metric" href="{{ url_for('encomendas.index', ver='tabela', status='pronto') }}"><span class="label">Prontas para entrega</span><span class="value">{{ m.ready }}</span><span class="hint">Inclui as que saíram para entrega</span></a>
+  <a class="metric" href="{{ url_for('encomendas.index', ver='tabela', prazo='hoje') }}"><span class="label">Entregas hoje</span><span class="value">{{ m.due_today }}</span><span class="hint">Prazo para {{ today|data }}</span></a>
+  <a class="metric" href="{{ url_for('encomendas.index', ver='tabela', prazo='atrasadas') }}"><span class="label">Atrasadas</span><span class="value {{ 'amount-out' if m.late }}">{{ m.late }}</span><span class="hint {{ 'neg' if m.late }}">{{ 'Precisam de atenção' if m.late else 'Nenhuma atrasada' }}</span></a>
+  <div class="metric"><span class="label">{{ period.label }}</span><span class="value">{{ m.delivered }} <small class="fs-6 text-muted fw-semibold">entregue{{ 's' if m.delivered != 1 }}</small></span><span class="hint">{{ m.received_count }} recebida{{ 's' if m.received_count != 1 }} · {{ m.canceled }} cancelada{{ 's' if m.canceled != 1 }}</span></div>
+</section>
+
+{% if alerts %}
+<section class="panel mb-4" aria-labelledby="alerts-title">
+  <div class="panel-head"><h2 class="section-title" id="alerts-title"><i class="bi bi-bell" aria-hidden="true"></i> Precisam de atenção</h2><span class="small text-muted">{{ alerts|length }} alerta{{ 's' if alerts|length != 1 }}</span></div>
+  <ul class="alert-list">
+    {% for a in alerts[:8] %}
+    <li class="alert-{{ a.kind }}">
+      <span class="alert-tag">{{ {'atrasada':'Atrasada','proxima':'Prazo próximo','confirmacao':'Confirmar','pronta':'Pronta','saldo':'Saldo','pendencia':'Pendência'}[a.kind] }}</span>
+      <a href="{{ url_for('encomendas.detail', order_id=a.order.id) }}" class="fw-semibold">{{ a.order.code }} · {{ a.order.customer_name }}</a>
+      <span class="text-muted">{{ a.label }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  {% if alerts|length > 8 %}<div class="panel-foot small">E mais {{ alerts|length - 8 }}. Use os filtros da tabela para ver todas.</div>{% endif %}
+</section>
+{% endif %}
+
+<div class="d-flex flex-wrap gap-2 align-items-end justify-content-between mb-3">
+  <nav class="seg" aria-label="Forma de visualização">
+    <a class="{{ 'on' if view != 'tabela' }}" href="{{ url_for('encomendas.index', ver='quadro', q=filters.q_text, prioridade=filters.priority, modalidade=filters.mode, prazo=filters.prazo) }}"><i class="bi bi-kanban" aria-hidden="true"></i> Quadro</a>
+    <a class="{{ 'on' if view == 'tabela' }}" href="{{ url_for('encomendas.index', ver='tabela', q=filters.q_text, prioridade=filters.priority, modalidade=filters.mode, prazo=filters.prazo) }}"><i class="bi bi-table" aria-hidden="true"></i> Tabela</a>
+  </nav>
+  <form class="filters" method="get">
+    <input type="hidden" name="ver" value="{{ view }}">
+    <div><label for="f-q">Buscar</label><input class="form-control" id="f-q" name="q" value="{{ filters.q_text }}" placeholder="DL-0001, cliente ou produto"></div>
+    {% if view == 'tabela' %}
+    <div><label for="f-st">Status</label><select class="form-select" id="f-st" name="status" data-autosubmit>
+      <option value="">Todos</option><option value="abertas" {{ 'selected' if filters.status == 'abertas' }}>Em aberto</option>
+      {% for k, l in statuses.items() %}<option value="{{ k }}" {{ 'selected' if filters.status == k }}>{{ l }}</option>{% endfor %}</select></div>
+    {% endif %}
+    <div><label for="f-pz">Prazo</label><select class="form-select" id="f-pz" name="prazo" data-autosubmit>
+      <option value="">Qualquer</option>
+      {% for k, l in [('atrasadas','Atrasadas'),('hoje','Hoje'),('3dias','Próximos 3 dias'),('semana','Próximos 7 dias')] %}<option value="{{ k }}" {{ 'selected' if filters.prazo == k }}>{{ l }}</option>{% endfor %}</select></div>
+    <div><label for="f-pr">Prioridade</label><select class="form-select" id="f-pr" name="prioridade" data-autosubmit>
+      <option value="">Todas</option>{% for k, l in priorities.items() %}<option value="{{ k }}" {{ 'selected' if filters.priority == k }}>{{ l }}</option>{% endfor %}</select></div>
+    <div><label for="f-md">Modalidade</label><select class="form-select" id="f-md" name="modalidade" data-autosubmit>
+      <option value="">Todas</option>{% for k, l in modes.items() %}<option value="{{ k }}" {{ 'selected' if filters.mode == k }}>{{ l }}</option>{% endfor %}</select></div>
+    {% if view == 'tabela' %}
+    <div><label for="f-de">Entrada de</label><input class="form-control" type="date" id="f-de" name="entrada_de" value="{{ entry_start.isoformat() if entry_start else '' }}"></div>
+    <div><label for="f-ate">até</label><input class="form-control" type="date" id="f-ate" name="entrada_ate" value="{{ entry_end.isoformat() if entry_end else '' }}"></div>
+    <div><label for="f-or">Ordenar por</label><select class="form-select" id="f-or" name="ordem" data-autosubmit>
+      {% for k, l in [('prazo','Prazo de entrega'),('prioridade','Prioridade'),('entrada','Data de entrada'),('status','Status'),('atualizacao','Última atualização')] %}<option value="{{ k }}" {{ 'selected' if filters.sort == k }}>{{ l }}</option>{% endfor %}</select></div>
+    {% endif %}
+    <button class="btn btn-quiet" type="submit">Filtrar</button>
+  </form>
+</div>
+
+{% if view == 'tabela' %}
+<section class="panel">
+  {% if rows %}
+  <div class="table-wrap"><table class="table-dl">
+    <thead><tr><th>Encomenda</th><th>Cliente</th><th>Entrada</th><th>Prazo</th><th>Status</th><th class="num">Total</th><th class="num">Saldo</th><th>Prioridade</th><th>Atualizada</th></tr></thead>
+    <tbody>
+    {% for o in rows %}{% set late = o.is_late(now) %}
+      <tr class="{{ 'muted-row' if o.status == 'cancelado' }}">
+        <td><a class="row-link" href="{{ url_for('encomendas.detail', order_id=o.id) }}">{{ o.code }}</a><span class="sub">{{ o.items|map(attribute='description')|join(', ')|truncate(40) }}</span></td>
+        <td>{{ o.customer_name }}<span class="sub">{{ o.channel_label }}</span></td>
+        <td>{{ o.created_at|data }}</td>
+        <td class="{{ 'amount-out fw-semibold' if late }}">{{ o.due_date|data }}{% if o.due_time %} {{ o.due_time.strftime('%H:%M') }}{% endif %}{% if late %}<span class="sub amount-out"><i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i> Atrasada</span>{% endif %}</td>
+        <td><span class="status {{ 'st-ok' if o.status == 'entregue' else ('st-off' if o.status == 'cancelado' else ('st-late' if late else 'st-open')) }}">{{ o.status_label }}</span>{% if o.blocked %} <span class="status st-part">Pendência</span>{% endif %}</td>
+        <td class="num">{{ o.total|brl }}</td>
+        <td class="num">{{ o.pending|brl }}</td>
+        <td>{% if o.priority != 'normal' %}<span class="prio prio-{{ o.priority }}">{{ o.priority_label }}</span>{% else %}Normal{% endif %}</td>
+        <td>{{ (o.updated_at or o.created_at)|data }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% else %}
+    {{ empty('Nenhuma encomenda com esses filtros', 'Limpe os filtros ou registre uma nova encomenda.', url_for('encomendas.new'), 'Nova encomenda') }}
+  {% endif %}
+</section>
+{% else %}
+<div class="kanban" data-kanban data-status-url="{{ url_for('encomendas.status', order_id=0) }}">
+  {% for st, items in columns.items() %}
+  <section class="kcol" data-column="{{ st }}" aria-labelledby="col-{{ st }}">
+    <header class="kcol-head"><h2 id="col-{{ st }}">{{ statuses[st] }}{% if st == 'entregue' %} <small>(últimos 7 dias)</small>{% endif %}</h2><span class="kcount">{{ items|length }}</span></header>
+    <div class="kcol-body">
+      {% for o in items %}{% include "encomendas/_card.html" %}{% else %}<p class="kempty">Nenhuma</p>{% endfor %}
+    </div>
+  </section>
+  {% endfor %}
+</div>
+<p class="small text-muted mt-2"><i class="bi bi-arrows-move" aria-hidden="true"></i> Arraste os cartões entre colunas ou use "Mover para…" em cada cartão. Só são aceitas as etapas permitidas para o pedido. Para cancelar, abra a encomenda.</p>
+{% endif %}
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/encomendas.js') }}?v=2"></script>{% endblock %}

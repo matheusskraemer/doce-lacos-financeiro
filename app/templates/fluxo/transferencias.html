@@ -32,6 +32,7 @@
             <td>{{ t.date|data }}</td>
             <td>{{ t.from_account.name }} → {{ t.to_account.name }}
               {% if t.notes %}<span class="sub">{{ t.notes }}</span>{% endif %}
+              <span class="sub">Registrada por {{ t.created_by.label if t.created_by else '—' }}</span>
               {% if t.reversal %}<span class="sub">Estornada em {{ t.reversal.date|data }}</span>{% endif %}</td>
             <td class="num">{{ t.amount|brl }}</td>
             <td class="text-end">{% if not t.reverses_id and not t.reversal %}

@@ -34,6 +34,7 @@ def create_app(config_name: str | None = None, **overrides) -> Flask:
     login_manager.init_app(app)
 
     from . import models  # noqa: F401  (registra os modelos)
+    from .services import audit  # noqa: F401  (autoria automática)
     from .auth import bp as auth_bp
     from .cli import register_cli
     from .views import register_views
@@ -66,7 +67,19 @@ def _register_template_helpers(app: Flask) -> None:
             settings = db.session.get(CompanySettings, 1)
         except Exception:
             db.session.rollback()
+        attention = 0
+        try:
+            from flask_login import current_user
+            if current_user.is_authenticated:
+                from sqlalchemy import func, or_, select
+                from .models import ORDER_OPEN_STATUSES, Order
+                attention = db.session.scalar(select(func.count(Order.id)).where(
+                    Order.status.in_(ORDER_OPEN_STATUSES),
+                    or_(Order.due_date < today(), Order.status.in_(("novo", "aguardando")))))
+        except Exception:
+            db.session.rollback()
         return {
+            "order_attention": attention,
             "company": settings,
             "today": today(),
             "csp_nonce": getattr(g, "csp_nonce", ""),
@@ -104,7 +117,8 @@ def _register_security(app: Flask) -> None:
     def health():
         from sqlalchemy import text
         db.session.execute(text("select 1"))
-        return {"status": "ok"}
+        rev = db.session.execute(text("select version_num from alembic_version")).scalar()
+        return {"status": "ok", "commit": (os.environ.get("RENDER_GIT_COMMIT") or "")[:7], "schema": rev}
 
 
 def _register_errors(app: Flask) -> None:

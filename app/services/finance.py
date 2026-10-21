@@ -30,14 +30,20 @@ class DuplicateSubmission(ValidationError):
 
 # ------------------------------------------------------------------ auxiliares
 
-def audit(action: str, entity: str, entity_id: int | None, summary: str) -> None:
-    uid = None
-    try:
-        if current_user and current_user.is_authenticated:
-            uid = current_user.id
-    except Exception:  # fora de contexto de requisição (CLI, testes)
-        uid = None
-    db.session.add(AuditLog(user_id=uid, action=action, entity=entity, entity_id=entity_id, summary=summary))
+def audit(action: str, entity: str, entity_id: int | None, summary: str, *, before: dict | None = None,
+          after: dict | None = None) -> None:
+    from .audit import record
+    record(action, entity, entity_id, summary, before=before, after=after)
+
+
+def _actor_id() -> int | None:
+    from .audit import current_actor
+    return current_actor()[0]
+
+
+TITLE_FIELDS = {"description": "Descrição", "category.name": "Categoria", "counterparty": "Contraparte",
+                "competence_date": "Competência", "due_date": "Vencimento", "amount": "Valor",
+                "expected_method.name": "Forma prevista", "expected_account.name": "Conta prevista", "notes": "Observações"}
 
 
 def _check_request_key(model, request_key: str | None) -> None:
@@ -84,6 +90,18 @@ def _method(method_id) -> PaymentMethod | None:
     if not method_id:
         return None
     return _get(PaymentMethod, method_id, "Forma de pagamento")
+
+
+def _order_event_for_title(title: Title, kind: str, summary: str) -> None:
+    """Registra no histórico da encomenda os movimentos financeiros da venda vinculada."""
+    sale = title.sale
+    order = sale.order if sale is not None else None
+    if order is None:
+        return
+    from ..models import OrderEvent
+    from .audit import current_actor
+    uid, name = current_actor()
+    db.session.add(OrderEvent(order_id=order.id, user_id=uid, username=name, kind=kind, summary=summary))
 
 
 def system_category(group: str, kind: str) -> Category:
@@ -208,6 +226,8 @@ def update_title(title_id: int, *, description: str, category_id: int, counterpa
     if amount < q(title.settled_amount):
         raise ValidationError(f"O valor não pode ser menor do que o já liquidado ({brl(title.settled_amount)}).")
     _method(expected_method_id)
+    from .audit import snapshot
+    snap_before = snapshot(title, TITLE_FIELDS)
     before = f"{brl(title.amount)} venc. {fmt_date(title.due_date)}"
     title.description = desc
     title.category_id = cat.id
@@ -218,7 +238,10 @@ def update_title(title_id: int, *, description: str, category_id: int, counterpa
     title.expected_method_id = expected_method_id or None
     title.expected_account_id = expected_account_id or None
     title.notes = (notes or "").strip() or None
-    audit("editar", "titulo", title.id, f"“{desc}”: {before} → {brl(amount)} venc. {fmt_date(due_date)}")
+    db.session.flush()
+    db.session.refresh(title, ["category", "expected_method", "expected_account"])
+    audit("editar", "titulo", title.id, f"“{desc}”: {before} → {brl(amount)} venc. {fmt_date(due_date)}",
+          before=snap_before, after=snapshot(title, TITLE_FIELDS))
     _commit()
     return title
 
@@ -258,13 +281,14 @@ def _cancel_title_locked(title: Title, reason: str, reverse_payments: bool, reve
                 _reverse_settlement_locked(s, reversal_date, f"Cancelamento: {reason}")
     title.canceled_at = utcnow()
     title.cancel_reason = reason
+    title.canceled_by_id = _actor_id()
     audit("cancelar", "titulo", title.id, f"“{title.description}” cancelado. Motivo: {reason}")
 
 
 # ------------------------------------------------------------------ liquidações
 
 def settle(title_id: int, *, amount: Decimal, settle_date: date, account_id: int, payment_method_id=None,
-           notes: str | None = None, request_key: str | None = None) -> Settlement:
+           notes: str | None = None, request_key: str | None = None, _commit_now: bool = True) -> Settlement:
     """Registra pagamento/recebimento total ou parcial de um título."""
     _check_request_key(Settlement, request_key)
     title = locked_title(title_id)
@@ -289,7 +313,10 @@ def settle(title_id: int, *, amount: Decimal, settle_date: date, account_id: int
     partial = " parcial" if amount < open_amount else ""
     audit("liquidar", "liquidacao", s.id,
           f"{verb}{partial} de {brl(amount)} em “{title.description}” ({account.name}, {fmt_date(settle_date)})")
-    _commit()
+    _order_event_for_title(title, "pagamento",
+                           f"{verb}{partial} de {brl(amount)} em {fmt_date(settle_date)} ({account.name})")
+    if _commit_now:
+        _commit()
     return s
 
 
@@ -307,6 +334,8 @@ def _reverse_settlement_locked(original: Settlement, reversal_date: date | None,
     db.session.flush()
     audit("estornar", "liquidacao", original.id,
           f"Estorno de {brl(original.amount)} em “{original.title.description}”. Motivo: {reason or '—'}")
+    _order_event_for_title(original.title, "estorno",
+                           f"Estorno (reembolso) de {brl(original.amount)} em {fmt_date(rev.date)}. Motivo: {reason or '—'}")
     return rev
 
 
@@ -351,7 +380,7 @@ class SaleInput:
     request_key: str | None = None
 
 
-def create_sale(data: SaleInput) -> Sale:
+def create_sale(data: SaleInput, *, _commit_now: bool = True) -> Sale:
     desc = (data.description or "").strip()
     if not desc:
         raise ValidationError("Descrição: identifique a venda.")
@@ -410,7 +439,8 @@ def create_sale(data: SaleInput) -> Sale:
                                   amount=net, payment_method_id=data.payment_method_id or None))
     audit("criar", "venda", sale.id, f"Venda “{desc}” de {brl(net)}"
           + (" recebida à vista" if data.received_now else f" em {data.installments}x a receber"))
-    _commit()
+    if _commit_now:
+        _commit()
     return sale
 
 
@@ -429,10 +459,13 @@ def update_sale_info(sale_id: int, *, description: str, customer: str | None, no
     return sale
 
 
-def cancel_sale(sale_id: int, reason: str, *, reverse_payments: bool = True, reversal_date: date | None = None) -> Sale:
+def cancel_sale(sale_id: int, reason: str, *, reverse_payments: bool = True, reversal_date: date | None = None,
+                _from_order: bool = False, _commit_now: bool = True) -> Sale:
     sale = db.session.execute(select(Sale).where(Sale.id == sale_id).with_for_update()).scalar_one_or_none()
     if sale is None:
         raise ValidationError("Venda não encontrada.")
+    if sale.order is not None and not _from_order:
+        raise ValidationError(f"Esta venda pertence à encomenda {sale.order.code}. Cancele pela encomenda.")
     if sale.status == "cancelada":
         raise ValidationError("Esta venda já está cancelada.")
     reason = (reason or "").strip()
@@ -445,8 +478,10 @@ def cancel_sale(sale_id: int, reason: str, *, reverse_payments: bool = True, rev
     sale.status = "cancelada"
     sale.canceled_at = utcnow()
     sale.cancel_reason = reason
+    sale.canceled_by_id = _actor_id()
     audit("cancelar", "venda", sale.id, f"Venda “{sale.description}” cancelada. Motivo: {reason}")
-    _commit()
+    if _commit_now:
+        _commit()
     return sale
 
 
@@ -541,6 +576,7 @@ def cancel_purchase(purchase_id: int, reason: str, *, reverse_payments: bool = T
     purchase.status = "cancelada"
     purchase.canceled_at = utcnow()
     purchase.cancel_reason = reason
+    purchase.canceled_by_id = _actor_id()
     audit("cancelar", "compra", purchase.id, f"Compra de {brl(purchase.total)} cancelada. Motivo: {reason}")
     _commit()
     return purchase

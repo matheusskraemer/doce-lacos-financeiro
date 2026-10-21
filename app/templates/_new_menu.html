@@ -1,4 +1,5 @@
 <ul class="dropdown-menu dropdown-menu-end">
+  <li><a class="dropdown-item" href="{{ url_for('encomendas.new') }}"><i class="bi bi-kanban"></i><span>Encomenda<small>Pedido para produzir e entregar</small></span></a></li>
   <li><a class="dropdown-item" href="{{ url_for('vendas.new') }}"><i class="bi bi-bag-heart"></i><span>Venda<small>À vista, a prazo ou parcelada</small></span></a></li>
   <li><a class="dropdown-item" href="{{ url_for('despesas.new') }}"><i class="bi bi-receipt"></i><span>Despesa<small>Paga agora ou a pagar</small></span></a></li>
   <li><a class="dropdown-item" href="{{ url_for('produtos.nova_compra') }}"><i class="bi bi-box-seam"></i><span>Compra de mercadorias<small>Para revenda</small></span></a></li>

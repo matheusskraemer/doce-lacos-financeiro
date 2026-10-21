@@ -11,7 +11,7 @@ from sqlalchemy.exc import IntegrityError
 
 from ..cli import validate_password
 from ..extensions import db
-from ..models import (ACCOUNT_KINDS, CATEGORY_GROUPS, Account, AuditLog, Category, CompanySettings, PaymentMethod,
+from ..models import (ACCOUNT_KINDS, User, CATEGORY_GROUPS, Account, AuditLog, Category, CompanySettings, PaymentMethod,
                       Settlement, Title, Transfer, utcnow)
 from ..services import metrics as m
 from ..services.finance import audit
@@ -43,12 +43,18 @@ def index():
     for col in (Transfer.from_account_id, Transfer.to_account_id):
         for a_id, n in db.session.execute(select(col, func.count(Transfer.id)).group_by(col)):
             acc_usage[a_id] = acc_usage.get(a_id, 0) + n
-    log = db.session.scalars(select(AuditLog).order_by(AuditLog.id.desc()).limit(60)).all()
+    log_q = select(AuditLog).order_by(AuditLog.id.desc())
+    who = request.args.get("autor", type=int)
+    if who:
+        log_q = log_q.where(AuditLog.user_id == who)
+    log = db.session.scalars(log_q.limit(200)).all()
+    users = db.session.scalars(select(User).order_by(User.active.desc(), User.username)).all()
     return render_template(
         "config/index.html", tab=tab, s=_settings(), balances=m.account_balances(today()),
         categories=db.session.scalars(select(Category).order_by(Category.kind, Category.group, Category.name)).all(),
         methods=db.session.scalars(select(PaymentMethod).order_by(PaymentMethod.name)).all(),
         kinds=ACCOUNT_KINDS, groups=CATEGORY_GROUPS, usage=usage, acc_usage=acc_usage, log=log, today=today(),
+        users=users, who=who,
     )
 
 
@@ -69,6 +75,7 @@ def empresa():
             setattr(s, field, val.upper())
         s.projection_days = f_int("projection_days", 30, field="Horizonte de projeção", lo=7, hi=180)
         s.upcoming_days = f_int("upcoming_days", 7, field="Aviso de vencimento", lo=1, hi=60)
+        s.order_alert_days = f_int("order_alert_days", 2, field="Alerta de prazo das encomendas", lo=0, hi=30)
         upload = request.files.get("logo")
         if upload and upload.filename:
             data = upload.read()
@@ -283,3 +290,98 @@ def conferencia():
     else:
         flash("Conferência concluída: saldos e lançamentos consistentes.", "success")
     return redirect(url_for("config.index", aba="backup"))
+
+
+# ------------------------------------------------------------------ usuários
+USERNAME_RE = re.compile(r"^[a-z0-9._@-]{3,80}$")
+
+
+def _confirm_admin() -> bool:
+    """Operações administrativas exigem a senha de quem está logado."""
+    me = current_user._get_current_object()
+    if not me.check_password(request.form.get("admin_password") or ""):
+        flash("Confirme a sua senha para concluir esta operação.", "danger")
+        return False
+    return True
+
+
+@bp.post("/usuarios")
+def novo_usuario():
+    if not _confirm_admin():
+        return redirect(url_for("config.index", aba="usuarios"))
+    username = f("username").lower()
+    name = f("display_name")
+    pw, confirm = request.form.get("password") or "", request.form.get("confirm_password") or ""
+    try:
+        if not name:
+            raise ValidationError("Nome: informe o nome da pessoa.")
+        if not USERNAME_RE.match(username):
+            raise ValidationError("Login: use de 3 a 80 caracteres entre letras minúsculas, números, ponto, hífen ou @.")
+        if db.session.scalar(select(User.id).where(func.lower(User.username) == username)):
+            raise ValidationError("Já existe um usuário com este login.")
+        err = validate_password(pw)
+        if err or pw != confirm:
+            raise ValidationError(err or "A confirmação não confere com a senha.")
+        u = User(username=username, display_name=name[:120], password_hash="!", created_by_id=current_user.id)
+        u.set_password(pw)
+        db.session.add(u)
+        db.session.flush()
+        audit("criar", "usuario", u.id, f"Usuário “{username}” ({name}) criado", after={"Login": username, "Nome": name})
+        db.session.commit()
+        flash(f"Usuário “{username}” criado. Informe a senha à pessoa por um canal seguro e peça que a troque no primeiro acesso.", "success")
+    except IntegrityError:
+        db.session.rollback()
+        flash("Já existe um usuário com este login.", "danger")
+    except ValidationError as exc:
+        db.session.rollback()
+        flash(str(exc), "danger")
+    return redirect(url_for("config.index", aba="usuarios"))
+
+
+@bp.post("/usuarios/<int:user_id>")
+def editar_usuario(user_id: int):
+    u = db.session.get(User, user_id) or abort(404)
+    if not _confirm_admin():
+        return redirect(url_for("config.index", aba="usuarios"))
+    action = request.form.get("action")
+    try:
+        if action == "toggle":
+            if u.id == current_user.id:
+                raise ValidationError("Você não pode desativar o próprio acesso.")
+            if u.active and db.session.scalar(select(func.count(User.id)).where(User.active.is_(True))) <= 1:
+                raise ValidationError("É preciso manter ao menos um usuário ativo.")
+            u.active = not u.active
+            u.deactivated_at = None if u.active else utcnow()
+            u.session_version += 1  # derruba sessões abertas
+            audit("editar", "usuario", u.id, f"Usuário “{u.username}” {'reativado' if u.active else 'desativado'}",
+                  before={"Acesso": "desativado" if u.active else "ativo"},
+                  after={"Acesso": "ativo" if u.active else "desativado"})
+            msg = f"Acesso de “{u.username}” {'reativado' if u.active else 'desativado'}."
+        elif action == "reset":
+            pw, confirm = request.form.get("password") or "", request.form.get("confirm_password") or ""
+            err = validate_password(pw)
+            if err or pw != confirm:
+                raise ValidationError(err or "A confirmação não confere com a nova senha.")
+            u.set_password(pw)  # também invalida as sessões abertas desse usuário
+            u.failed_attempts, u.locked_until = 0, None
+            audit("editar", "usuario", u.id, f"Senha de “{u.username}” redefinida")
+            msg = f"Senha de “{u.username}” redefinida. As sessões abertas dessa pessoa foram encerradas."
+        elif action == "rename":
+            name = f("display_name")
+            if not name:
+                raise ValidationError("Nome: informe o nome.")
+            audit("editar", "usuario", u.id, f"Nome de “{u.username}” alterado", before={"Nome": u.display_name or "—"},
+                  after={"Nome": name})
+            u.display_name = name[:120]
+            msg = "Nome atualizado."
+        else:
+            raise ValidationError("Ação inválida.")
+        db.session.commit()
+        flash(msg, "success")
+        if action == "reset" and u.id == current_user.id:
+            logout_user()
+            return redirect(url_for("auth.login"))
+    except ValidationError as exc:
+        db.session.rollback()
+        flash(str(exc), "danger")
+    return redirect(url_for("config.index", aba="usuarios"))

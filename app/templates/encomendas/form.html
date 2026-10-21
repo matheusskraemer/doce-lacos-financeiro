@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf, reqkey, money_field, select_opts %}
+{% set editing = order is not none %}
+{% set page_title = ('Editar ' ~ order.code) if editing else 'Nova encomenda' %}
+{% macro v(name, default='') -%}{{ form.get(name, default) if form else default }}{%- endmacro %}
+{% block content %}
+{% set locked = editing and order.sale and order.sale.titles|selectattr('settlements')|list|length > 0 %}
+<div class="page-head">
+  <div><h1 class="page-title">{{ page_title }}</h1>
+    <p class="page-sub">{% if editing %}{{ order.customer_name }} · {{ order.status_label }}{% else %}Só nome do cliente, prazo e itens são obrigatórios.{% endif %}</p></div>
+  {% if editing %}<a class="btn btn-quiet" href="{{ url_for('encomendas.detail', order_id=order.id) }}"><i class="bi bi-arrow-left"></i> Voltar</a>{% endif %}
+</div>
+
+<form method="post" class="panel" data-once data-order-form>
+  {{ csrf() }}{% if not editing %}{{ reqkey() }}{% endif %}
+
+  <div class="form-section">
+    <h3>Cliente e pedido</h3>
+    <div class="row g-3">
+      <div class="col-md-5"><label class="form-label" for="customer_name">Nome do cliente</label>
+        <input class="form-control" id="customer_name" name="customer_name" required maxlength="120" value="{{ v('customer_name', order.customer_name if editing else '') }}"></div>
+      <div class="col-md-3"><label class="form-label" for="customer_phone">Telefone / WhatsApp <span class="text-muted fw-normal">(opcional)</span></label>
+        <input class="form-control" id="customer_phone" name="customer_phone" inputmode="tel" maxlength="40" value="{{ v('customer_phone', order.customer_phone or '' if editing else '') }}"></div>
+      <div class="col-md-2"><label class="form-label" for="channel">Canal</label>
+        <select class="form-select" id="channel" name="channel">{% for k, l in channels.items() %}<option value="{{ k }}" {{ 'selected' if v('channel', order.channel if editing else 'whatsapp') == k }}>{{ l }}</option>{% endfor %}</select></div>
+      <div class="col-md-2"><label class="form-label" for="priority">Prioridade</label>
+        <select class="form-select" id="priority" name="priority">{% for k, l in priorities.items() %}<option value="{{ k }}" {{ 'selected' if v('priority', order.priority if editing else 'normal') == k }}>{{ l }}</option>{% endfor %}</select></div>
+      <div class="col-12"><label class="form-label" for="contact_notes">Observações de contato <span class="text-muted fw-normal">(opcional)</span></label>
+        <input class="form-control" id="contact_notes" name="contact_notes" maxlength="500" value="{{ v('contact_notes', order.contact_notes or '' if editing else '') }}" placeholder="Ex.: prefere mensagem depois das 18h"></div>
+    </div>
+  </div>
+
+  <div class="form-section">
+    <h3>Itens</h3>
+    {% if locked %}<div class="callout mb-3">Há pagamentos registrados nesta encomenda: itens e valores ficam travados para não divergir do financeiro. Para mudar valores, cancele com reembolso e registre uma nova.</div>{% endif %}
+    <div class="table-wrap"><table class="items-table order-items w-100" data-items>
+      <thead><tr><th>Produto</th><th>Descrição</th><th>Personalização</th><th class="text-end">Qtd.</th><th class="text-end">Valor unit.</th><th class="text-end">Desconto</th><th class="text-end">Subtotal</th><th></th></tr></thead>
+      <tbody>
+      {% if form and form.getlist %}
+        {% set rows = range([form.getlist('item_desc')|length, 1]|max) %}
+      {% elif editing %}{% set rows = range(order.items|length) %}{% else %}{% set rows = range(1) %}{% endif %}
+      {% for i in rows %}
+        {% if form and form.getlist %}
+          {% set it = {'product_id': form.getlist('item_product')[i]|default(''), 'description': form.getlist('item_desc')[i]|default(''), 'customization': form.getlist('item_custom')[i]|default(''), 'quantity': form.getlist('item_qty')[i]|default('1'), 'unit_price': form.getlist('item_price')[i]|default(''), 'discount': form.getlist('item_discount')[i]|default(''), 'notes': form.getlist('item_notes')[i]|default('')} %}
+        {% elif editing %}{% set x = order.items[i] %}
+          {% set it = {'product_id': x.product_id or '', 'description': x.description, 'customization': x.customization or '', 'quantity': x.quantity|num(0) if x.quantity == x.quantity|int else x.quantity|num(3), 'unit_price': x.unit_price|money_input, 'discount': x.discount|money_input if x.discount else '', 'notes': x.notes or ''} %}
+        {% else %}{% set it = {'product_id': '', 'description': '', 'customization': '', 'quantity': '1', 'unit_price': '', 'discount': '', 'notes': ''} %}{% endif %}
+        <tr data-item-row>
+          <td><select class="form-select" name="item_product" data-product-select aria-label="Produto" {{ 'disabled' if locked }}><option value="">—</option>
+            {% for p in products %}<option value="{{ p.id }}" data-price="{{ p.sale_price|money_input if p.sale_price else '' }}" data-name="{{ p.name }}" {{ 'selected' if it.product_id|string == p.id|string }}>{{ p.name }}</option>{% endfor %}</select></td>
+          <td><input class="form-control" name="item_desc" maxlength="160" aria-label="Descrição" value="{{ it.description }}" {{ 'readonly' if locked }}></td>
+          <td><input class="form-control" name="item_custom" aria-label="Personalização" value="{{ it.customization }}" placeholder="Cor, nome, tamanho…" {{ 'readonly' if locked }}></td>
+          <td><input class="form-control text-end" name="item_qty" inputmode="decimal" aria-label="Quantidade" value="{{ it.quantity }}" data-qty {{ 'readonly' if locked }}></td>
+          <td><input class="form-control input-money" name="item_price" inputmode="decimal" aria-label="Valor unitário" value="{{ it.unit_price }}" data-money data-price {{ 'readonly' if locked }}></td>
+          <td><input class="form-control input-money" name="item_discount" inputmode="decimal" aria-label="Desconto do item" value="{{ it.discount }}" data-money data-item-discount {{ 'readonly' if locked }}></td>
+          <td class="text-end num" data-line-total>R$ 0,00</td>
+          <td><button class="btn btn-sm btn-quiet" type="button" data-remove-item aria-label="Remover item" {{ 'disabled' if locked }}><i class="bi bi-x"></i></button>
+            <input type="hidden" name="item_notes" value="{{ it.notes }}">
+            {% if locked %}<input type="hidden" name="item_product" value="{{ it.product_id }}">{% endif %}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+    {% if not locked %}<button class="btn btn-sm btn-outline-brand mt-2" type="button" data-add-item><i class="bi bi-plus"></i> Adicionar item</button>{% endif %}
+    <div class="row g-3 mt-1 align-items-end">
+      <div class="col-md-4">{{ money_field('discount', 'Desconto no pedido', v('discount', order.discount|money_input if editing and order.discount else ''), id='discount', help='Além dos descontos por item.') }}</div>
+      <div class="col-md-8 text-md-end">
+        <div class="total-line justify-content-md-end gap-3"><span class="text-muted">Itens</span><span class="num" data-gross>R$ 0,00</span></div>
+        <div class="total-line justify-content-md-end gap-3"><span class="text-muted">Descontos</span><span class="num" data-discounts>R$ 0,00</span></div>
+        <div class="total-line big justify-content-md-end gap-3"><span>Total do pedido</span><span class="num" data-net>R$ 0,00</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="form-section">
+    <h3>Prazo e entrega</h3>
+    <div class="row g-3">
+      <div class="col-md-3"><label class="form-label" for="due_date">Data prometida</label>
+        <input class="form-control" type="date" id="due_date" name="due_date" required value="{{ v('due_date', order.due_date.isoformat() if editing else '') }}"></div>
+      <div class="col-md-2"><label class="form-label" for="due_time">Horário <span class="text-muted fw-normal">(opcional)</span></label>
+        <input class="form-control" type="time" id="due_time" name="due_time" value="{{ v('due_time', order.due_time.strftime('%H:%M') if editing and order.due_time else '') }}"></div>
+      <div class="col-md-4"><label class="form-label" for="delivery_mode">Modalidade</label>
+        <select class="form-select" id="delivery_mode" name="delivery_mode" data-delivery-mode>{% for k, l in modes.items() %}<option value="{{ k }}" {{ 'selected' if v('delivery_mode', order.delivery_mode if editing else 'retirada') == k }}>{{ l }}</option>{% endfor %}</select></div>
+      <div class="col-md-3"><label class="form-label" for="delivery_person">Responsável pela entrega</label>
+        <input class="form-control" id="delivery_person" name="delivery_person" maxlength="120" value="{{ v('delivery_person', order.delivery_person or '' if editing else '') }}"></div>
+      <div class="col-12" data-when-mode="retirada"><label class="form-label" for="pickup_location">Local de retirada <span class="text-muted fw-normal">(opcional)</span></label>
+        <input class="form-control" id="pickup_location" name="pickup_location" maxlength="200" value="{{ v('pickup_location', order.pickup_location or '' if editing else '') }}"></div>
+      <div class="col-12" data-when-mode="entrega,transportadora"><label class="form-label" for="delivery_address">Endereço de entrega</label>
+        <textarea class="form-control" id="delivery_address" name="delivery_address" rows="2">{{ v('delivery_address', order.delivery_address or '' if editing else '') }}</textarea></div>
+    </div>
+  </div>
+
+  <div class="form-section">
+    <h3>Pagamento</h3>
+    <div class="row g-3">
+      <div class="col-md-4"><label class="form-label" for="method_id">Forma de pagamento</label>
+        <select class="form-select" id="method_id" name="method_id">{{ select_opts(methods, v('method_id', order.payment_method_id or '' if editing else ''), '—') }}</select></div>
+      <div class="col-md-4"><label class="form-label" for="balance_due_date">Vencimento do saldo <span class="text-muted fw-normal">(opcional)</span></label>
+        <input class="form-control" type="date" id="balance_due_date" name="balance_due_date" value="{{ v('balance_due_date', order.balance_due_date.isoformat() if editing and order.balance_due_date else '') }}">
+        <div class="form-text">Sem data, o saldo vence no prazo de entrega.</div></div>
+      {% if not editing %}
+      <div class="col-md-4"><label class="form-label" for="initial_status">Situação</label>
+        <select class="form-select" id="initial_status" name="initial_status">
+          {% for k in ['novo','aguardando','confirmado'] %}<option value="{{ k }}" {{ 'selected' if v('initial_status', 'novo') == k }}>{{ statuses[k] }}</option>{% endfor %}</select>
+        <div class="form-text">Confirmada gera a venda (a receber) no financeiro.</div></div>
+      <div class="col-12"><div class="callout">Recebeu sinal? Informe abaixo: ele vira um recebimento no financeiro e gera a venda vinculada.</div></div>
+      <div class="col-md-4">{{ money_field('deposit_amount', 'Sinal recebido agora', v('deposit_amount'), id='deposit_amount') }}</div>
+      <div class="col-md-4"><label class="form-label" for="deposit_date">Data do sinal</label><input class="form-control" type="date" id="deposit_date" name="deposit_date" value="{{ v('deposit_date', today.isoformat()) }}"></div>
+      <div class="col-md-4"><label class="form-label" for="deposit_account_id">Conta do sinal</label>
+        <select class="form-select" id="deposit_account_id" name="deposit_account_id">{{ select_opts(accounts, v('deposit_account_id', accounts[0].id if accounts else ''), 'Escolha a conta') }}</select></div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="form-section">
+    <h3>Produção e observações</h3>
+    <div class="row g-3">
+      <div class="col-md-6"><label class="form-label" for="production_notes">Instruções para produção</label>
+        <textarea class="form-control" id="production_notes" name="production_notes" rows="3">{{ v('production_notes', order.production_notes or '' if editing else '') }}</textarea></div>
+      <div class="col-md-6"><label class="form-label" for="customer_references">Referências enviadas pelo cliente</label>
+        <textarea class="form-control" id="customer_references" name="customer_references" rows="3" placeholder="Descrição ou link das fotos de referência">{{ v('customer_references', order.customer_references or '' if editing else '') }}</textarea></div>
+      <div class="col-12"><label class="form-label" for="internal_notes">Observações internas</label>
+        <textarea class="form-control" id="internal_notes" name="internal_notes" rows="2">{{ v('internal_notes', order.internal_notes or '' if editing else '') }}</textarea></div>
+    </div>
+  </div>
+
+  <div class="sticky-actions">
+    <a class="btn btn-quiet me-auto" href="{{ url_for('encomendas.detail', order_id=order.id) if editing else url_for('encomendas.index') }}">Cancelar</a>
+    <button class="btn btn-brand" type="submit">{{ 'Salvar alterações' if editing else 'Registrar encomenda' }}</button>
+  </div>
+</form>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/encomendas.js') }}?v=2"></script>{% endblock %}

@@ -4,7 +4,7 @@
 {% block content %}
 <div class="page-head"><div><h1 class="page-title">Configurações</h1><p class="page-sub">Identidade, contas, categorias, segurança e cópias de segurança.</p></div></div>
 <nav class="tabs-dl">
-  {% for k, l in [('empresa','Empresa e identidade'),('contas','Contas financeiras'),('categorias','Categorias'),('formas','Formas de pagamento'),('seguranca','Segurança'),('backup','Backup e conferência'),('historico','Registro de alterações')] %}
+  {% for k, l in [('empresa','Empresa e identidade'),('contas','Contas financeiras'),('categorias','Categorias'),('formas','Formas de pagamento'),('usuarios','Usuários'),('seguranca','Minha senha'),('backup','Backup e conferência'),('historico','Registro de alterações')] %}
   <a class="{{ 'on' if tab == k }}" href="{{ url_for('config.index', aba=k) }}">{{ l }}</a>{% endfor %}
 </nav>
 
@@ -38,6 +38,7 @@
   <div class="form-section"><h3>Preferências</h3><div class="row g-3">
     <div class="col-md-4"><label class="form-label" for="pd">Horizonte da projeção (dias)</label><input class="form-control" type="number" min="7" max="180" id="pd" name="projection_days" value="{{ s.projection_days }}"></div>
     <div class="col-md-4"><label class="form-label" for="ud">Avisar vencimentos com antecedência de (dias)</label><input class="form-control" type="number" min="1" max="60" id="ud" name="upcoming_days" value="{{ s.upcoming_days }}"></div>
+    <div class="col-md-4"><label class="form-label" for="oad">Alertar encomendas com prazo em até (dias)</label><input class="form-control" type="number" min="0" max="30" id="oad" name="order_alert_days" value="{{ s.order_alert_days }}"></div>
   </div></div>
   <div class="sticky-actions"><button class="btn btn-brand" type="submit">Salvar configurações</button></div>
 </form>
@@ -131,6 +132,63 @@
     <div class="panel-body"><input class="form-control mb-3" name="name" required placeholder="Ex.: Link de pagamento" aria-label="Nome"><button class="btn btn-brand w-100" type="submit">Adicionar</button></div></form></div>
 </div>
 
+{% elif tab == 'usuarios' %}
+<div class="row g-4">
+  <div class="col-lg-8">
+    <section class="panel">
+      <div class="panel-head"><h2 class="section-title">Usuários</h2><span class="small text-muted">Todos os usuários ativos têm o mesmo acesso</span></div>
+      {% for u in users %}
+      <details class="border-bottom px-3 py-2">
+        <summary class="d-flex justify-content-between align-items-center gap-2 py-1">
+          <span><strong class="{{ 'text-muted text-decoration-line-through' if not u.active }}">{{ u.label }}</strong>
+            <span class="small text-muted">· {{ u.username }}{{ ' · você' if u.id == current_user.id }}{{ ' · desativado' if not u.active }}</span></span>
+          <span class="small text-muted">Último acesso: {{ u.last_login_at|data if u.last_login_at else 'nunca' }}</span>
+        </summary>
+        <div class="py-2 small text-muted">Criado em {{ u.created_at|data }}{% if u.deactivated_at %} · desativado em {{ u.deactivated_at|data }}{% endif %} ·
+          <a href="{{ url_for('config.index', aba='historico', autor=u.id) }}">ver o que esta pessoa registrou</a></div>
+        <div class="row g-3 pb-2">
+          <form class="col-md-6" method="post" action="{{ url_for('config.editar_usuario', user_id=u.id) }}">{{ csrf() }}<input type="hidden" name="action" value="rename">
+            <label class="form-label" for="un-{{ u.id }}">Nome</label>
+            <input class="form-control mb-2" id="un-{{ u.id }}" name="display_name" value="{{ u.display_name or '' }}" required>
+            <input class="form-control mb-2" type="password" name="admin_password" placeholder="Sua senha para confirmar" autocomplete="current-password" required aria-label="Sua senha para confirmar">
+            <button class="btn btn-quiet btn-sm" type="submit">Salvar nome</button>
+          </form>
+          <form class="col-md-6" method="post" action="{{ url_for('config.editar_usuario', user_id=u.id) }}">{{ csrf() }}<input type="hidden" name="action" value="reset">
+            <label class="form-label" for="up-{{ u.id }}">Redefinir senha</label>
+            <input class="form-control mb-2" type="password" id="up-{{ u.id }}" name="password" minlength="10" autocomplete="new-password" placeholder="Nova senha" required>
+            <input class="form-control mb-2" type="password" name="confirm_password" autocomplete="new-password" placeholder="Repita a nova senha" required aria-label="Repita a nova senha">
+            <input class="form-control mb-2" type="password" name="admin_password" placeholder="Sua senha para confirmar" autocomplete="current-password" required aria-label="Sua senha para confirmar">
+            <button class="btn btn-quiet btn-sm" type="submit" data-confirm="Redefinir a senha de {{ u.label }}? As sessões abertas dessa pessoa serão encerradas.">Redefinir senha</button>
+          </form>
+          {% if u.id != current_user.id %}
+          <form class="col-12 d-flex gap-2 align-items-center" method="post" action="{{ url_for('config.editar_usuario', user_id=u.id) }}">{{ csrf() }}<input type="hidden" name="action" value="toggle">
+            <input class="form-control w-auto" type="password" name="admin_password" placeholder="Sua senha para confirmar" autocomplete="current-password" required aria-label="Sua senha para confirmar">
+            <button class="btn {{ 'btn-outline-danger' if u.active else 'btn-outline-brand' }} btn-sm" type="submit" data-confirm="{{ 'Desativar' if u.active else 'Reativar' }} o acesso de {{ u.label }}?">{{ 'Desativar acesso' if u.active else 'Reativar acesso' }}</button>
+            <span class="form-text">{{ 'Desativar encerra o acesso na hora; o histórico continua mostrando o que essa pessoa fez.' if u.active else '' }}</span>
+          </form>
+          {% else %}<p class="col-12 form-text mb-0">Você não pode desativar o próprio acesso.</p>{% endif %}
+        </div>
+      </details>
+      {% endfor %}
+    </section>
+  </div>
+  <div class="col-lg-4">
+    <form method="post" action="{{ url_for('config.novo_usuario') }}" class="panel">{{ csrf() }}
+      <div class="panel-head"><h2 class="section-title">Novo usuário</h2></div>
+      <div class="panel-body">
+        <div class="mb-2"><label class="form-label" for="nu-name">Nome</label><input class="form-control" id="nu-name" name="display_name" required maxlength="120"></div>
+        <div class="mb-2"><label class="form-label" for="nu-login">Login</label><input class="form-control" id="nu-login" name="username" required pattern="[a-z0-9._@\-]{3,80}" autocapitalize="none" autocomplete="off">
+          <div class="form-text">Minúsculas, números, ponto, hífen ou @. Não pode repetir.</div></div>
+        <div class="mb-2"><label class="form-label" for="nu-pw">Senha inicial</label><input class="form-control" type="password" id="nu-pw" name="password" minlength="10" autocomplete="new-password" required>
+          <div class="form-text">Mínimo de 10 caracteres, com maiúsculas, minúsculas e números.</div></div>
+        <div class="mb-3"><label class="form-label" for="nu-pw2">Repita a senha</label><input class="form-control" type="password" id="nu-pw2" name="confirm_password" autocomplete="new-password" required></div>
+        <div class="mb-3"><label class="form-label" for="nu-admin">Sua senha (confirmação)</label><input class="form-control" type="password" id="nu-admin" name="admin_password" autocomplete="current-password" required></div>
+        <button class="btn btn-brand w-100" type="submit">Criar usuário</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 {% elif tab == 'seguranca' %}
 <div class="row g-4"><div class="col-lg-6">
   <form method="post" action="{{ url_for('config.senha') }}" class="panel">{{ csrf() }}
@@ -182,11 +240,16 @@
 </div>
 
 {% elif tab == 'historico' %}
+<form class="filters mb-3" method="get"><input type="hidden" name="aba" value="historico">
+  <div><label for="h-who">Autor</label><select class="form-select" id="h-who" name="autor" data-autosubmit><option value="">Todos</option>
+    {% for u in users %}<option value="{{ u.id }}" {{ 'selected' if who == u.id }}>{{ u.label }}</option>{% endfor %}</select></div>
+</form>
 <section class="panel"><div class="table-wrap"><table class="table-dl">
-  <thead><tr><th>Quando</th><th>Ação</th><th>Detalhe</th></tr></thead>
-  <tbody>{% for l in log %}<tr><td>{{ l.created_at|data }}</td><td>{{ l.action|capitalize }} {{ l.entity }}</td><td>{{ l.summary }}</td></tr>
-  {% else %}<tr><td colspan="3" class="text-muted">Nenhuma alteração registrada ainda.</td></tr>{% endfor %}</tbody>
+  <thead><tr><th>Quando</th><th>Quem</th><th>Ação</th><th>Detalhe</th></tr></thead>
+  <tbody>{% for l in log %}<tr><td>{{ l.created_at|data }}</td><td>{{ l.author }}</td><td>{{ l.action|capitalize }} {{ l.entity }}</td>
+    <td>{{ l.summary }}{% set ch = l.changes() %}{% if ch %}<details class="tl-diff"><summary>Antes e depois</summary><table class="table-dl"><tbody>{% for k, b, a in ch %}<tr><td>{{ k }}</td><td class="text-muted text-decoration-line-through">{{ b }}</td><td>{{ a }}</td></tr>{% endfor %}</tbody></table></details>{% endif %}</td></tr>
+  {% else %}<tr><td colspan="4" class="text-muted">Nenhuma alteração registrada ainda.</td></tr>{% endfor %}</tbody>
 </table></div></section>
-<p class="small text-muted mt-2">Mostra as 60 alterações mais recentes. O registro não pode ser editado pela interface.</p>
+<p class="small text-muted mt-2">Mostra as 200 alterações mais recentes. O registro não pode ser editado nem apagado, nem pela interface nem diretamente no banco.</p>
 {% endif %}
 {% endblock %}

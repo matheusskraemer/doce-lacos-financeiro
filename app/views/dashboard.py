@@ -60,8 +60,11 @@ def index():
     has_movements = bool(db.session.scalar(select(Title.id).limit(1)))
     recent = db.session.scalars(select(Settlement).order_by(Settlement.date.desc(), Settlement.id.desc()).limit(8)).all()
 
+    from ..services import orders as osvc
+    order_alerts = osvc.alerts(settings.order_alert_days if settings else 2)
+
     return render_template(
-        "dashboard.html",
+        "dashboard.html", order_alerts=order_alerts,
         period=period, period_choices=PERIOD_CHOICES, sales=sales, cash=cash, paid_groups=paid_groups,
         purchases=purchases, payables=payables, receivables=receivables, proj=proj, balances=balances,
         balance_now=balance_now, charts=charts, has_accounts=has_accounts,

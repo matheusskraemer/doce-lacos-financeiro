@@ -1,0 +1,40 @@
+{%- set late = o.is_late(now) -%}
+{%- set dleft = o.days_left(today) -%}
+<article class="kcard {{ 'is-late' if late }} prio-{{ o.priority }}" draggable="{{ 'true' if o.allowed_next else 'false' }}"
+         data-order-id="{{ o.id }}" data-status="{{ o.status }}" data-allowed="{{ o.allowed_next|join(',') }}"
+         aria-label="{{ o.code }}, {{ o.customer_name }}, prazo {{ o.due_date|data }}">
+  <div class="kcard-top">
+    <a class="kcard-code" href="{{ url_for('encomendas.detail', order_id=o.id) }}">{{ o.code }}</a>
+    {% if o.priority != 'normal' %}<span class="prio prio-{{ o.priority }}">{{ o.priority_label }}</span>{% endif %}
+  </div>
+  <div class="kcard-name">{{ o.customer_name }}</div>
+  <div class="kcard-items">{{ o.items|map(attribute='description')|join(', ')|truncate(70) }}</div>
+  <div class="kcard-due {{ 'late' if late else ('soon' if o.is_open and dleft <= alert_days else '') }}">
+    <i class="bi bi-{{ 'exclamation-triangle-fill' if late else 'calendar-event' }}" aria-hidden="true"></i>
+    {% if not o.is_open %}Entregue {{ o.delivered_at|data }}
+    {% elif late %}Atrasada · prazo {{ o.due_date|data }}{% if o.due_time %} {{ o.due_time.strftime('%H:%M') }}{% endif %}
+    {% elif dleft == 0 %}Hoje{% if o.due_time %} às {{ o.due_time.strftime('%H:%M') }}{% endif %}
+    {% elif dleft == 1 %}Amanhã · {{ o.due_date|data }}
+    {% else %}{{ o.due_date|data }} · em {{ dleft }} dias{% endif %}
+  </div>
+  <div class="kcard-foot">
+    <span class="num">{{ o.total|brl }}</span>
+    {% if o.pending > 0 %}<span class="small text-muted">falta {{ o.pending|brl }}</span>{% else %}<span class="small amount-in">pago</span>{% endif %}
+  </div>
+  <div class="kcard-meta">
+    <span title="Modalidade"><i class="bi bi-{{ 'shop' if o.delivery_mode == 'retirada' else 'truck' }}" aria-hidden="true"></i> {{ o.delivery_label }}</span>
+    {% if o.blocked %}<span class="status st-part" title="{{ o.blocked_reason }}">Pendência</span>{% endif %}
+    <span class="ms-auto" title="Cadastrada por">{{ o.created_by.label if o.created_by else '' }}</span>
+  </div>
+  {% if o.allowed_next %}
+  <form class="kcard-move" method="post" action="{{ url_for('encomendas.status', order_id=o.id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="next" value="{{ request.full_path }}">
+    <label class="visually-hidden" for="mv-{{ o.id }}">Mover {{ o.code }} para</label>
+    <select class="form-select form-select-sm" id="mv-{{ o.id }}" name="to" data-autosubmit>
+      <option value="">Mover para…</option>
+      {% for st in o.allowed_next if st != 'cancelado' %}<option value="{{ st }}">{{ statuses[st] }}</option>{% endfor %}
+    </select>
+  </form>
+  {% endif %}
+</article>

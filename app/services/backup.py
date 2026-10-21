@@ -15,15 +15,15 @@ from decimal import Decimal
 from sqlalchemy import LargeBinary, select, text
 
 from ..extensions import db
-from ..models import (Account, AuditLog, Category, CompanySettings, PaymentMethod, Product, Purchase, PurchaseItem,
-                      Sale, SaleItem, Settlement, Title, Transfer, User, utcnow)
+from ..models import (Account, AuditLog, Category, CompanySettings, Order, OrderEvent, OrderItem, PaymentMethod, Product,
+                      Purchase, PurchaseItem, Sale, SaleItem, Settlement, Title, Transfer, User, utcnow)
 
 FORMAT = "doce-lacos-backup"
 VERSION = 1
 
 # Ordem respeita as chaves estrangeiras.
 MODELS = [User, CompanySettings, Account, Category, PaymentMethod, Product, Sale, SaleItem, Purchase, PurchaseItem,
-          Title, Settlement, Transfer, AuditLog]
+          Title, Settlement, Transfer, Order, OrderItem, OrderEvent, AuditLog]
 
 
 def _encode(value):
@@ -93,22 +93,36 @@ def restore_all(payload: dict, *, force: bool = False) -> dict:
         raise RestoreError("O banco de destino já tem dados. Use --force para substituí-los.")
     counts = {}
     try:
+        if db.engine.dialect.name == "postgresql":
+            # libera, só nesta transação, a substituição do histórico protegido
+            db.session.execute(text("SET LOCAL docelacos.allow_history_purge = 'on'"))
+        # users.created_by_id aponta para users: insere sem a autorreferência e completa depois
         for model in reversed(MODELS):
             db.session.execute(model.__table__.delete())
+        deferred_users = []
         for model in MODELS:
             rows = tables.get(model.__tablename__, [])
             cols = {c.name: c for c in model.__table__.columns}
-            if rows:
-                db.session.execute(model.__table__.insert(), [
-                    {k: _decode(cols[k], v) for k, v in r.items() if k in cols} for r in rows
-                ])
+            data = [{k: _decode(cols[k], v) for k, v in r.items() if k in cols} for r in rows]
+            if model is User:
+                for d in data:
+                    if d.get("created_by_id"):
+                        deferred_users.append((d["id"], d["created_by_id"]))
+                        d["created_by_id"] = None
+            if data:
+                db.session.execute(model.__table__.insert(), data)
             counts[model.__tablename__] = len(rows)
+            if model is User and deferred_users:
+                for uid, cb in deferred_users:
+                    db.session.execute(User.__table__.update().where(User.__table__.c.id == uid).values(created_by_id=cb))
         if db.engine.dialect.name == "postgresql":
             for model in MODELS:
                 t = model.__tablename__
                 db.session.execute(text(
                     f"SELECT setval(pg_get_serial_sequence('{t}', 'id'), COALESCE((SELECT MAX(id) FROM {t}), 0) + 1, false)"
                 ))
+            db.session.execute(text(
+                "SELECT setval('order_number_seq', COALESCE((SELECT MAX(number) FROM orders), 0) + 1, false)"))
         db.session.commit()
     except Exception:
         db.session.rollback()

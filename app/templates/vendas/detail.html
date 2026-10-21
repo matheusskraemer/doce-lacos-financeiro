@@ -4,7 +4,7 @@
 {% block content %}
 <div class="page-head">
   <div>
-    <div class="small text-muted mb-1">Venda #{{ sale.id }} · {{ sale.sale_date|data }}</div>
+    <div class="small text-muted mb-1">Venda #{{ sale.id }} · {{ sale.sale_date|data }}{% if sale.created_by %} · registrada por {{ sale.created_by.label }}{% endif %}{% if sale.order %} · <a href="{{ url_for('encomendas.detail', order_id=sale.order.id) }}">Encomenda {{ sale.order.code }}</a>{% endif %}</div>
     <h1 class="page-title">{{ sale.description }}</h1>
     <p class="page-sub">{{ sale.customer or 'Cliente não informado' }} · {{ doc_status(sale.receipt_status, statuses) }}</p>
   </div>
@@ -12,7 +12,7 @@
 </div>
 
 {% if sale.status == 'cancelada' %}
-<div class="flash flash-warning mb-4"><i class="bi bi-slash-circle"></i><div>Venda cancelada em {{ sale.canceled_at|data }}. Motivo: {{ sale.cancel_reason }}. Ela não entra nos totais de vendas.</div></div>
+<div class="flash flash-warning mb-4"><i class="bi bi-slash-circle"></i><div>Venda cancelada em {{ sale.canceled_at|data }}{% if sale.canceled_by %} por {{ sale.canceled_by.label }}{% endif %}. Motivo: {{ sale.cancel_reason }}. Ela não entra nos totais de vendas.</div></div>
 {% endif %}
 
 <div class="row g-4">
@@ -71,7 +71,9 @@
     </section>
     {% endif %}
 
-    {% if sale.status == 'ativa' %}
+    {% if sale.status == 'ativa' and sale.order %}
+    <div class="callout">Esta venda pertence à <a href="{{ url_for('encomendas.detail', order_id=sale.order.id) }}">encomenda {{ sale.order.code }}</a>. Edição de valores e cancelamento são feitos pela encomenda.</div>
+    {% elif sale.status == 'ativa' %}
     <section class="panel mb-4">
       <div class="panel-head"><h2 class="section-title">Dados da venda</h2></div>
       <div class="panel-body">

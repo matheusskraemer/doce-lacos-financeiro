@@ -1,11 +1,13 @@
 # Doce Laços — Sistema de Gestão Financeira
 
-Aplicação web para controlar vendas, receitas, despesas, compras de mercadorias, contas a pagar e a receber, fluxo de caixa e relatórios da Doce Laços. Uso por uma única pessoa, acessível pelo navegador, com banco PostgreSQL.
+Aplicação web para controlar encomendas, vendas, receitas, despesas, compras de mercadorias, contas a pagar e a receber, fluxo de caixa e relatórios da Doce Laços. Vários usuários com login próprio, acessível pelo navegador, com banco PostgreSQL.
 
 ## O que a aplicação faz
 
 | Área | O que tem |
 |---|---|
+| Encomendas | Quadro Kanban (arrastar entre etapas) e tabela, número DL-0001, itens com personalização e desconto, prazo com horário, retirada/entrega, sinal e pagamentos parciais integrados ao financeiro, pendências, alertas de atraso, histórico completo (detalhes em `docs/ENCOMENDAS.md`) |
+| Usuários | Logins individuais, ativação/desativação, redefinição de senha, último acesso; autoria em todos os registros e histórico de alterações com antes/depois |
 | Visão geral | Saldo atual (frase de destaque), projeção, 8 indicadores por período (hoje, 7 dias, mês, mês anterior, ano, personalizado), 5 gráficos, próximos compromissos e últimas movimentações |
 | Vendas e receitas | Venda com itens ou valor total, desconto, à vista ou a prazo, parcelamento, recebimento parcial, cancelamento com estorno; outras receitas (reembolso, aporte etc.) |
 | Despesas | Categoria, fornecedor, competência × vencimento × pagamento, parcelamento, recorrência mensal |
@@ -13,7 +15,7 @@ Aplicação web para controlar vendas, receitas, despesas, compras de mercadoria
 | Contas a pagar / receber | Filtros, vencidas, a vencer, liquidação total ou parcial direto da lista, histórico, estorno |
 | Fluxo de caixa | Por dia, semana ou mês; realizado × previsto; saldo projetado; saldo por conta |
 | Relatórios | 11 relatórios com filtros, links para os lançamentos e exportação CSV e Excel |
-| Configurações | Nome, logotipo e cores da marca, contas financeiras e saldos iniciais, categorias, formas de pagamento, troca de senha, cópia de segurança, conferência dos cálculos, registro de alterações |
+| Configurações | Nome, logotipo e cores da marca, contas financeiras e saldos iniciais, categorias, formas de pagamento, usuários, troca de senha, cópia de segurança, conferência dos cálculos, registro de alterações |
 
 ## Tecnologias
 
@@ -66,7 +68,7 @@ createdb docelacos_test && createdb docelacos_restore
 TEST_DATABASE_URL=postgresql+psycopg://postgres@localhost:5432/docelacos_test pytest -q
 ```
 
-Resultado da última execução: **32 testes aprovados**. Eles cobrem os 16 critérios de aceite do projeto (venda à vista, venda futura, recebimento parcial, despesa paga e pendente, pagamento parcial, compra a prazo, estorno e cancelamento, transferência, fluxo realizado e projetado, comparação de períodos, exportação, persistência, rota protegida, backup e restauração, ausência de duplicidade) e também CSRF, bloqueio de login, hash de senha, cabeçalhos de segurança e upload de logotipo.
+Resultado da última execução: **58 testes aprovados**. Eles cobrem os 16 critérios de aceite do projeto (venda à vista, venda futura, recebimento parcial, despesa paga e pendente, pagamento parcial, compra a prazo, estorno e cancelamento, transferência, fluxo realizado e projetado, comparação de períodos, exportação, persistência, rota protegida, backup e restauração, ausência de duplicidade) e também CSRF, bloqueio de login, hash de senha, cabeçalhos de segurança e upload de logotipo.
 
 Além disso, o comando abaixo confere, a qualquer momento, se os saldos batem lançamento a lançamento:
 
@@ -90,7 +92,9 @@ Resumo do que **você** precisa fazer; nada disso foi feito por mim, porque envo
 
 **Atualizar:** cada `git push` na branch `main` gera um novo deploy (migrações incluídas).
 
-**Esqueceu a senha:** Shell do serviço → `flask --app wsgi reset-password`. A troca encerra todas as sessões abertas.
+**Esqueceu a senha:** outro usuário ativo redefine em Configurações → Usuários; se não houver, Shell do serviço → `flask --app wsgi reset-password`. A troca encerra as sessões abertas daquela pessoa.
+
+**Novos usuários:** Configurações → Usuários (pede a senha de quem está logado). Os comandos `create-user` e `ensure-user` só criam o *primeiro* usuário.
 
 Alternativas de hospedagem e custos estão em [`docs/HOSPEDAGEM.md`](docs/HOSPEDAGEM.md).
 
@@ -124,7 +128,9 @@ Senha com hash scrypt · CSRF em todos os formulários · bloqueio após tentati
 - Não calcula lucro contábil nem custo das mercadorias vendidas (CMV): o controle de estoque é só de compras e custos.
 - Sem emissão fiscal nem integração com maquininhas, bancos ou Nuvemshop.
 - Recuperação de senha pelo terminal da hospedagem (não há envio de e-mail).
-- Um único usuário.
+- Todos os usuários ativos têm o mesmo acesso (sem perfis).
+- Cancelar encomenda com valores recebidos exige reembolso; reter sinal como multa ainda não é suportado.
+- Alertas de encomendas só dentro da aplicação (sem WhatsApp/e-mail).
 - A identidade visual é provisória até o envio do logotipo e das cores oficiais (trocáveis pela tela de Configurações, sem mexer no código).
 
 ## Telas
