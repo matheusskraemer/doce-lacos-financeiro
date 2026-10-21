@@ -104,6 +104,37 @@ def register_cli(app) -> None:
         db.session.commit()
         click.echo(f"Usuário “{username}” criado.")
 
+    @app.cli.command("ensure-user")
+    def ensure_user_cmd():
+        """Cria o usuário a partir de INITIAL_ADMIN_USERNAME/INITIAL_ADMIN_PASSWORD, só se ainda não existir nenhum.
+
+        Alternativa ao create-user quando não há terminal na hospedagem. Depois do primeiro
+        login, apague INITIAL_ADMIN_PASSWORD das variáveis de ambiente.
+        """
+        import os
+        seed_defaults()
+        username = (os.environ.get("INITIAL_ADMIN_USERNAME") or "").strip().lower()
+        password = os.environ.get("INITIAL_ADMIN_PASSWORD") or ""
+        if db.session.scalar(select(func.count(User.id))) > 0:
+            if password:
+                click.echo("Usuário já existe. Remova INITIAL_ADMIN_PASSWORD das variáveis de ambiente.")
+            return
+        if not username or not password:
+            click.echo("Nenhum usuário cadastrado. Defina INITIAL_ADMIN_USERNAME e INITIAL_ADMIN_PASSWORD para criá-lo.")
+            return
+        if not re.fullmatch(r"[a-z0-9._@-]{3,80}", username):
+            click.echo("INITIAL_ADMIN_USERNAME inválido: use letras minúsculas, números, ponto, hífen ou @.")
+            sys.exit(1)
+        err = validate_password(password)
+        if err:
+            click.echo(f"INITIAL_ADMIN_PASSWORD recusada: {err}")
+            sys.exit(1)
+        user = User(username=username, password_hash="!")
+        user.set_password(password)
+        db.session.add(user)
+        db.session.commit()
+        click.echo(f"Usuário “{username}” criado. Agora apague INITIAL_ADMIN_PASSWORD das variáveis de ambiente.")
+
     @app.cli.command("reset-password")
     @click.option("--username", prompt="Usuário (login)")
     def reset_password_cmd(username):

@@ -7,7 +7,7 @@ services:
     plan: 0.5c-512mb
     region: virginia
     buildCommand: pip install -r requirements.txt
-    preDeployCommand: flask --app wsgi db upgrade && flask --app wsgi setup
+    preDeployCommand: flask --app wsgi db upgrade && flask --app wsgi setup && flask --app wsgi ensure-user
     startCommand: gunicorn wsgi:app --workers 2 --bind 0.0.0.0:$PORT --access-logfile -
     healthCheckPath: /healthz
     autoDeploy: true

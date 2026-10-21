@@ -238,3 +238,20 @@ def test_logo_svg_com_script_e_recusado(client):
     client.post("/configuracoes/empresa", data=data, content_type="multipart/form-data")
     from app.models import CompanySettings
     assert db.session.get(CompanySettings, 1).logo_data is None
+
+
+def test_ensure_user_por_variaveis_de_ambiente(app, monkeypatch):
+    runner = app.test_cli_runner()
+    r = runner.invoke(args=["ensure-user"])
+    assert "Defina INITIAL_ADMIN_USERNAME" in r.output
+    monkeypatch.setenv("INITIAL_ADMIN_USERNAME", "Carolina")
+    monkeypatch.setenv("INITIAL_ADMIN_PASSWORD", "fraca")
+    r = runner.invoke(args=["ensure-user"])
+    assert r.exit_code == 1 and db.session.query(User).count() == 0
+    monkeypatch.setenv("INITIAL_ADMIN_PASSWORD", PASSWORD)
+    r = runner.invoke(args=["ensure-user"])
+    assert r.exit_code == 0 and PASSWORD not in r.output
+    u = db.session.scalar(select(User))
+    assert u.username == "carolina" and u.check_password(PASSWORD)
+    r = runner.invoke(args=["ensure-user"])  # não cria outro nem altera a senha
+    assert db.session.query(User).count() == 1 and "Remova INITIAL_ADMIN_PASSWORD" in r.output
