@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% from "_macros.html" import empty, title_status, settle_form %}
+{% set pay = kind == 'pagar' %}
+{% set page_title = 'Contas a pagar' if pay else 'Contas a receber' %}
+{% block content %}
+<div class="page-head">
+  <div><h1 class="page-title">{{ page_title }}</h1>
+    <p class="page-sub">{{ summary.open|brl }} em aberto{% if summary.overdue_count %}, {{ summary.overdue|brl }} {{ 'vencidos' if pay else 'em atraso' }}{% endif %}.</p></div>
+  <a class="btn btn-brand" href="{{ url_for('despesas.new') if pay else url_for('vendas.new_receita') }}"><i class="bi bi-plus-lg"></i> {{ 'Nova despesa' if pay else 'Nova receita' }}</a>
+</div>
+
+<section class="metrics mb-4">
+  <div class="metric"><span class="label">Em aberto</span><span class="value num text-start">{{ summary.open|brl }}</span><span class="hint">{{ rows|selectattr('open_amount')|list|length }} lançamento(s) na lista</span></div>
+  <a class="metric" href="{{ url_for(request.endpoint, status='vencido') }}"><span class="label">{{ 'Vencidas' if pay else 'Em atraso' }}</span><span class="value num text-start {{ 'amount-out' if summary.overdue > 0 }}">{{ summary.overdue|brl }}</span><span class="hint">{{ summary.overdue_count }} lançamento(s)</span></a>
+  <div class="metric"><span class="label">Próximos {{ upcoming_days }} dias</span><span class="value num text-start">{{ summary.soon|brl }}</span><span class="hint">Até {{ soon|data }} · {{ summary.soon_count }} lançamento(s)</span></div>
+  <a class="metric" href="{{ url_for('fluxo.index') }}"><span class="label">Impacto no caixa</span><span class="value num text-start">{{ ('−' if pay else '+') }} {{ summary.open|brl }}</span><span class="hint">Ver projeção no fluxo de caixa</span></a>
+</section>
+
+<form class="filters mb-3" method="get">
+  <div><label for="f-ver">Mostrar</label><select class="form-select" id="f-ver" name="ver" data-autosubmit>
+    <option value="abertas" {{ 'selected' if view == 'abertas' }}>Em aberto</option>
+    <option value="liquidadas" {{ 'selected' if view == 'liquidadas' }}>{{ 'Pagas' if pay else 'Recebidas' }}</option>
+    <option value="todas" {{ 'selected' if view == 'todas' }}>Todas</option></select></div>
+  <div><label for="f-st">Situação</label><select class="form-select" id="f-st" name="status" data-autosubmit>
+    <option value="">Todas</option>{% for k, l in status_labels.items() %}<option value="{{ k }}" {{ 'selected' if status_filter == k }}>{{ l }}</option>{% endfor %}</select></div>
+  <div><label for="f-cat">Categoria</label><select class="form-select" id="f-cat" name="categoria" data-autosubmit>
+    <option value="">Todas</option>{% for c in cats %}<option value="{{ c.id }}" {{ 'selected' if cat_id == c.id }}>{{ c.name }}</option>{% endfor %}</select></div>
+  <div><label for="f-i">Vencimento de</label><input class="form-control" type="date" id="f-i" name="inicio" value="{{ start.isoformat() if start else '' }}"></div>
+  <div><label for="f-f">até</label><input class="form-control" type="date" id="f-f" name="fim" value="{{ end.isoformat() if end else '' }}"></div>
+  <div><label for="f-q">Buscar</label><input class="form-control" id="f-q" name="q" value="{{ search }}" placeholder="Descrição ou {{ 'fornecedor' if pay else 'cliente' }}"></div>
+  <button class="btn btn-quiet" type="submit">Filtrar</button>
+</form>
+
+<section class="panel">
+  {% if rows %}
+  <div class="table-wrap"><table class="table-dl">
+    <thead><tr><th>Vencimento</th><th>Descrição</th><th>{{ 'Fornecedor' if pay else 'Cliente' }}</th><th>Categoria</th><th class="num">Valor</th><th class="num">Em aberto</th><th>Situação</th><th></th></tr></thead>
+    <tbody>
+    {% for t in rows %}
+      {% set st = t.status_on(ref) %}
+      <tr class="{{ 'muted-row' if t.is_canceled }}">
+        <td class="{{ 'amount-out fw-semibold' if st == 'vencido' }}">{{ t.due_date|data }}</td>
+        <td><a class="row-link" href="{{ url_for('titulos.detail', title_id=t.id) }}">{{ t.description }}</a>
+          <span class="sub">{{ t.origin_label }}{% if t.expected_method %} · {{ t.expected_method.name }}{% endif %}</span></td>
+        <td>{{ t.counterparty or '—' }}</td>
+        <td>{{ t.category.name }}</td>
+        <td class="num">{{ t.amount|brl }}</td>
+        <td class="num">{{ t.open_amount|brl }}</td>
+        <td>{{ title_status(t, ref) }}</td>
+        <td class="text-end">{% if t.open_amount > 0 %}<button class="btn btn-sm btn-outline-brand" type="button" data-bs-toggle="collapse" data-bs-target="#q-{{ t.id }}">{{ 'Pagar' if pay else 'Receber' }}</button>{% endif %}</td>
+      </tr>
+      {% if t.open_amount > 0 %}
+      <tr class="collapse" id="q-{{ t.id }}"><td colspan="8" class="bg-white">{{ settle_form(t, accounts, methods, ref, next_url=request.full_path, compact=True) }}</td></tr>
+      {% endif %}
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% else %}
+    {{ empty('Nenhuma conta ' ~ ('a pagar' if pay else 'a receber') ~ ' com esses filtros',
+             'Quando você registrar ' ~ ('despesas ou compras a pagar' if pay else 'vendas a prazo ou receitas a receber') ~ ', elas aparecem aqui até serem liquidadas.') }}
+  {% endif %}
+</section>
+{% endblock %}

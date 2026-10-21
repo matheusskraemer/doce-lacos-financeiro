@@ -1,0 +1,192 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf, money_field %}
+{% set page_title = "Configurações" %}
+{% block content %}
+<div class="page-head"><div><h1 class="page-title">Configurações</h1><p class="page-sub">Identidade, contas, categorias, segurança e cópias de segurança.</p></div></div>
+<nav class="tabs-dl">
+  {% for k, l in [('empresa','Empresa e identidade'),('contas','Contas financeiras'),('categorias','Categorias'),('formas','Formas de pagamento'),('seguranca','Segurança'),('backup','Backup e conferência'),('historico','Registro de alterações')] %}
+  <a class="{{ 'on' if tab == k }}" href="{{ url_for('config.index', aba=k) }}">{{ l }}</a>{% endfor %}
+</nav>
+
+{% if tab == 'empresa' %}
+<form method="post" action="{{ url_for('config.empresa') }}" enctype="multipart/form-data" class="panel">{{ csrf() }}
+  <div class="form-section"><h3>Empresa</h3><div class="row g-3">
+    <div class="col-md-6"><label class="form-label" for="cn">Nome</label><input class="form-control" id="cn" name="company_name" value="{{ s.company_name }}" required maxlength="120"></div>
+    <div class="col-md-6"><label class="form-label" for="tg">Subtítulo do menu</label><input class="form-control" id="tg" name="tagline" value="{{ s.tagline or '' }}" maxlength="160"></div>
+  </div></div>
+  <div class="form-section"><h3>Logotipo</h3>
+    <div class="d-flex gap-3 align-items-center">
+      <img class="brand-logo" src="{{ url_for('brand.logo') }}" alt="Logotipo atual">
+      <div class="flex-grow-1">
+        <input class="form-control" type="file" name="logo" accept="image/png,image/jpeg,image/webp,image/svg+xml" aria-label="Arquivo do logotipo">
+        <div class="form-text">{% if s.logo_data %}Logotipo oficial enviado em {{ s.logo_updated_at|data }}.{% else %}Usando logotipo provisório. Envie o oficial em SVG ou PNG com fundo transparente (até 2 MB).{% endif %}</div>
+        {% if s.logo_data %}<div class="form-check mt-1"><input class="form-check-input" type="checkbox" id="rl" name="remove_logo" value="1"><label class="form-check-label" for="rl">Voltar ao logotipo provisório</label></div>{% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="form-section"><h3>Cores da marca</h3>
+    <p class="form-text mt-0">Valores provisórios até recebermos as cores oficiais. A interface inteira se ajusta a elas.</p>
+    <div class="row g-3">
+      {% for field, label, help in [('color_primary','Cor principal','Botões, destaques e valores principais'),('color_accent','Cor de destaque','Detalhes finos, item ativo do menu'),('color_ink','Cor do menu','Fundo do menu lateral e títulos')] %}
+      <div class="col-md-4"><label class="form-label" for="{{ field }}">{{ label }}</label>
+        <div class="d-flex gap-2 align-items-center"><input class="form-control form-control-color swatch" type="color" id="{{ field }}-picker" value="{{ s[field] }}" data-color-sync="#{{ field }}" aria-label="{{ label }}">
+          <input class="form-control" id="{{ field }}" name="{{ field }}" value="{{ s[field] }}" pattern="#[0-9a-fA-F]{6}" maxlength="7" required></div>
+        <div class="form-text">{{ help }}</div></div>
+      {% endfor %}
+    </div>
+  </div>
+  <div class="form-section"><h3>Preferências</h3><div class="row g-3">
+    <div class="col-md-4"><label class="form-label" for="pd">Horizonte da projeção (dias)</label><input class="form-control" type="number" min="7" max="180" id="pd" name="projection_days" value="{{ s.projection_days }}"></div>
+    <div class="col-md-4"><label class="form-label" for="ud">Avisar vencimentos com antecedência de (dias)</label><input class="form-control" type="number" min="1" max="60" id="ud" name="upcoming_days" value="{{ s.upcoming_days }}"></div>
+  </div></div>
+  <div class="sticky-actions"><button class="btn btn-brand" type="submit">Salvar configurações</button></div>
+</form>
+
+{% elif tab == 'contas' %}
+<div class="row g-4">
+  <div class="col-lg-8">
+    <section class="panel">
+      <div class="panel-head"><h2 class="section-title">Contas cadastradas</h2></div>
+      {% if balances %}
+      {% for b in balances %}{% set a = b.account %}
+      <details class="border-bottom px-3 py-2">
+        <summary class="d-flex justify-content-between align-items-center gap-2 py-1">
+          <span><strong class="{{ 'text-muted text-decoration-line-through' if not a.active }}">{{ a.name }}</strong> <span class="small text-muted">· {{ a.kind_label }}{{ ' · fora do saldo consolidado' if not a.include_in_total }}{{ ' · desativada' if not a.active }}</span></span>
+          <span class="num fw-semibold">{{ b.balance|brl }}</span>
+        </summary>
+        <form method="post" action="{{ url_for('config.editar_conta', account_id=a.id) }}" class="row g-2 py-2">{{ csrf() }}
+          <div class="col-md-5"><label class="form-label" for="an-{{ a.id }}">Nome</label><input class="form-control" id="an-{{ a.id }}" name="name" value="{{ a.name }}" required></div>
+          <div class="col-md-3"><label class="form-label" for="ak-{{ a.id }}">Tipo</label><select class="form-select" id="ak-{{ a.id }}" name="kind">{% for k, l in kinds.items() %}<option value="{{ k }}" {{ 'selected' if a.kind == k }}>{{ l }}</option>{% endfor %}</select></div>
+          <div class="col-md-4">{{ money_field('opening_balance', 'Saldo inicial', a.opening_balance|money_input, id='ao-' ~ a.id) }}</div>
+          <div class="col-md-4"><label class="form-label" for="ad-{{ a.id }}">Data do saldo inicial</label><input class="form-control" type="date" id="ad-{{ a.id }}" name="opening_date" value="{{ a.opening_date.isoformat() }}" required></div>
+          <div class="col-md-8 d-flex align-items-end"><div class="form-check"><input class="form-check-input" type="checkbox" id="ai-{{ a.id }}" name="include_in_total" value="1" {{ 'checked' if a.include_in_total }}><label class="form-check-label" for="ai-{{ a.id }}">Somar no saldo consolidado da Doce Laços</label></div></div>
+          <div class="col-12"><input class="form-control" name="notes" value="{{ a.notes or '' }}" placeholder="Observações" aria-label="Observações"></div>
+          <div class="col-12 d-flex gap-2">
+            <button class="btn btn-brand btn-sm" type="submit">Salvar</button>
+            <button class="btn btn-quiet btn-sm" type="submit" name="action" value="toggle" formnovalidate data-confirm="{{ 'Desativar' if a.active else 'Reativar' }} a conta {{ a.name }}?">{{ 'Desativar' if a.active else 'Reativar' }}</button>
+            <span class="form-text ms-auto">{{ acc_usage.get(a.id, 0) }} movimentação(ões). Contas com histórico não são excluídas, apenas desativadas.</span>
+          </div>
+        </form>
+      </details>
+      {% endfor %}
+      {% else %}<div class="panel-body text-muted">Nenhuma conta cadastrada.</div>{% endif %}
+    </section>
+  </div>
+  <div class="col-lg-4">
+    <form method="post" action="{{ url_for('config.nova_conta') }}" class="panel">{{ csrf() }}
+      <div class="panel-head"><h2 class="section-title">Nova conta</h2></div>
+      <div class="panel-body">
+        <div class="mb-2"><label class="form-label" for="nn">Nome</label><input class="form-control" id="nn" name="name" required placeholder="Ex.: Banco, Caixa da loja, Mercado Pago"></div>
+        <div class="mb-2"><label class="form-label" for="nk">Tipo</label><select class="form-select" id="nk" name="kind">{% for k, l in kinds.items() %}<option value="{{ k }}">{{ l }}</option>{% endfor %}</select></div>
+        <div class="mb-2">{{ money_field('opening_balance', 'Saldo inicial', '0,00', id='no', help='Quanto havia nesta conta na data abaixo. Pode ser negativo (ex.: -150,00).') }}</div>
+        <div class="mb-2"><label class="form-label" for="nd">Data do saldo inicial</label><input class="form-control" type="date" id="nd" name="opening_date" value="{{ today.isoformat() }}" required></div>
+        <div class="form-check mb-3"><input class="form-check-input" type="checkbox" id="ni" name="include_in_total" value="1" checked><label class="form-check-label" for="ni">Somar no saldo consolidado</label></div>
+        <button class="btn btn-brand w-100" type="submit">Cadastrar conta</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% elif tab == 'categorias' %}
+<div class="row g-4">
+  <div class="col-lg-8">
+    {% for kind, label in [('despesa','Categorias de despesas'),('receita','Categorias de receitas')] %}
+    <section class="panel mb-4"><div class="panel-head"><h2 class="section-title">{{ label }}</h2></div>
+      <div class="table-wrap"><table class="table-dl"><thead><tr><th>Nome</th><th>Tipo</th><th class="num">Lançamentos</th><th></th></tr></thead><tbody>
+      {% for c in categories if c.kind == kind %}
+        <tr class="{{ 'muted-row' if not c.active }}">
+          <td><form class="d-flex gap-2" method="post" action="{{ url_for('config.editar_categoria', cat_id=c.id) }}">{{ csrf() }}
+            <input class="form-control form-control-sm" name="name" value="{{ c.name }}" aria-label="Nome da categoria"><button class="btn btn-sm btn-quiet" type="submit">Renomear</button></form></td>
+          <td>{{ c.group_label }}{{ ' · sistema' if c.system }}</td>
+          <td class="num">{{ usage.get(c.id, 0) }}</td>
+          <td class="text-end">{% if not c.system %}<form method="post" action="{{ url_for('config.editar_categoria', cat_id=c.id) }}">{{ csrf() }}<input type="hidden" name="action" value="toggle">
+            <button class="btn btn-sm btn-quiet" type="submit">{{ 'Desativar' if c.active else 'Reativar' }}</button></form>{% endif %}</td>
+        </tr>
+      {% endfor %}</tbody></table></div></section>
+    {% endfor %}
+  </div>
+  <div class="col-lg-4">
+    <form method="post" action="{{ url_for('config.nova_categoria') }}" class="panel">{{ csrf() }}
+      <div class="panel-head"><h2 class="section-title">Nova categoria</h2></div>
+      <div class="panel-body">
+        <div class="mb-2"><label class="form-label" for="cname">Nome</label><input class="form-control" id="cname" name="name" required></div>
+        <div class="mb-3"><label class="form-label" for="cgroup">Tipo</label><select class="form-select" id="cgroup" name="group">
+          <option value="operacional">Despesa operacional</option><option value="outra_receita">Receita (não venda)</option></select></div>
+        <button class="btn btn-brand w-100" type="submit">Criar categoria</button>
+        <p class="form-text mt-2 mb-0">Categorias desativadas somem dos formulários, mas os lançamentos antigos continuam com elas nos relatórios.</p>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% elif tab == 'formas' %}
+<div class="row g-4">
+  <div class="col-lg-8"><section class="panel"><div class="table-wrap"><table class="table-dl"><thead><tr><th>Forma de pagamento</th><th></th></tr></thead><tbody>
+    {% for pm in methods %}<tr class="{{ 'muted-row' if not pm.active }}">
+      <td><form class="d-flex gap-2" method="post" action="{{ url_for('config.editar_forma', method_id=pm.id) }}">{{ csrf() }}<input class="form-control form-control-sm" name="name" value="{{ pm.name }}" aria-label="Nome"><button class="btn btn-sm btn-quiet" type="submit">Renomear</button></form></td>
+      <td class="text-end"><form method="post" action="{{ url_for('config.editar_forma', method_id=pm.id) }}">{{ csrf() }}<input type="hidden" name="action" value="toggle"><button class="btn btn-sm btn-quiet" type="submit">{{ 'Desativar' if pm.active else 'Reativar' }}</button></form></td></tr>{% endfor %}
+  </tbody></table></div></section></div>
+  <div class="col-lg-4"><form method="post" action="{{ url_for('config.nova_forma') }}" class="panel">{{ csrf() }}
+    <div class="panel-head"><h2 class="section-title">Nova forma</h2></div>
+    <div class="panel-body"><input class="form-control mb-3" name="name" required placeholder="Ex.: Link de pagamento" aria-label="Nome"><button class="btn btn-brand w-100" type="submit">Adicionar</button></div></form></div>
+</div>
+
+{% elif tab == 'seguranca' %}
+<div class="row g-4"><div class="col-lg-6">
+  <form method="post" action="{{ url_for('config.senha') }}" class="panel">{{ csrf() }}
+    <div class="panel-head"><h2 class="section-title">Trocar senha</h2></div>
+    <div class="panel-body">
+      <div class="mb-2"><label class="form-label" for="cp">Senha atual</label><input class="form-control" type="password" id="cp" name="current_password" autocomplete="current-password" required></div>
+      <div class="mb-2"><label class="form-label" for="np">Nova senha</label><input class="form-control" type="password" id="np" name="new_password" autocomplete="new-password" minlength="10" required>
+        <div class="form-text">Mínimo de 10 caracteres, com maiúsculas, minúsculas e números.</div></div>
+      <div class="mb-3"><label class="form-label" for="cf">Repita a nova senha</label><input class="form-control" type="password" id="cf" name="confirm_password" autocomplete="new-password" required></div>
+      <button class="btn btn-brand" type="submit">Trocar senha</button>
+      <p class="form-text mt-2 mb-0">Ao trocar a senha, todas as sessões abertas em outros dispositivos são encerradas.</p>
+    </div>
+  </form>
+</div><div class="col-lg-6">
+  <section class="panel"><div class="panel-head"><h2 class="section-title">Proteções ativas</h2></div><div class="panel-body small">
+    <ul class="mb-0 ps-3">
+      <li>Senha guardada com hash scrypt; nunca em texto.</li>
+      <li>Bloqueio temporário após tentativas de login sem sucesso.</li>
+      <li>Proteção contra envio de formulários de fora do sistema (CSRF).</li>
+      <li>Sessão expira após {{ config.PERMANENT_SESSION_LIFETIME.total_seconds()|int // 3600 }} horas; cookies só por HTTPS em produção.</li>
+      <li>Último acesso: {{ current_user.last_login_at|data }}.</li>
+    </ul>
+  </div></section>
+</div></div>
+
+{% elif tab == 'backup' %}
+<div class="row g-4">
+  <div class="col-lg-6">
+    <section class="panel mb-4"><div class="panel-head"><h2 class="section-title">Cópia completa dos dados</h2></div><div class="panel-body">
+      <p>Baixa todos os registros (vendas, despesas, contas, configurações) em um arquivo JSON que pode ser restaurado em um banco novo com <code>flask restore-json</code>.</p>
+      <div class="callout mb-3">O arquivo contém todos os dados financeiros. Guarde em local protegido (pasta criptografada ou cofre de senhas) e não envie por e-mail ou WhatsApp.</div>
+      <form method="post" action="{{ url_for('config.backup') }}" class="d-flex gap-2 align-items-end">{{ csrf() }}
+        <div class="flex-grow-1"><label class="form-label" for="bp">Confirme sua senha</label><input class="form-control" type="password" id="bp" name="password" autocomplete="current-password" required></div>
+        <button class="btn btn-brand" type="submit"><i class="bi bi-download"></i> Baixar cópia</button>
+      </form>
+      <p class="form-text mt-2 mb-0">Última cópia baixada: {{ s.last_backup_download_at|data if s.last_backup_download_at else 'nunca' }}.</p>
+    </div></section>
+  </div>
+  <div class="col-lg-6">
+    <section class="panel mb-4"><div class="panel-head"><h2 class="section-title">Conferência dos cálculos</h2></div><div class="panel-body">
+      <p>Verifica se nenhum lançamento foi liquidado acima do valor, se estornos batem com os originais e se o saldo de cada conta confere lançamento a lançamento.</p>
+      <a class="btn btn-outline-brand" href="{{ url_for('config.conferencia') }}">Rodar conferência</a>
+    </div></section>
+    <section class="panel"><div class="panel-head"><h2 class="section-title">Backups automáticos</h2></div><div class="panel-body small">
+      <p class="mb-2">Os backups automáticos do banco são feitos pela hospedagem, não pela aplicação. Confira no painel do provedor se estão ativos e qual é a retenção.</p>
+      <p class="mb-0">Procedimento completo de backup e restauração: <code>docs/BACKUP.md</code> no repositório.</p>
+    </div></section>
+  </div>
+</div>
+
+{% elif tab == 'historico' %}
+<section class="panel"><div class="table-wrap"><table class="table-dl">
+  <thead><tr><th>Quando</th><th>Ação</th><th>Detalhe</th></tr></thead>
+  <tbody>{% for l in log %}<tr><td>{{ l.created_at|data }}</td><td>{{ l.action|capitalize }} {{ l.entity }}</td><td>{{ l.summary }}</td></tr>
+  {% else %}<tr><td colspan="3" class="text-muted">Nenhuma alteração registrada ainda.</td></tr>{% endfor %}</tbody>
+</table></div></section>
+<p class="small text-muted mt-2">Mostra as 60 alterações mais recentes. O registro não pode ser editado pela interface.</p>
+{% endif %}
+{% endblock %}

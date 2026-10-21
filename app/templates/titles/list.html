@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% from "_macros.html" import period_seg, empty, title_status %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1 class="page-title">{{ page_title }}</h1>
+    <p class="page-sub">{{ period.label }} · por {{ 'competência' if basis == 'competencia' else 'vencimento' }}</p>
+  </div>
+  <a class="btn btn-brand" href="{{ new_url }}"><i class="bi bi-plus-lg"></i> {{ 'Nova despesa' if kind == 'pagar' else 'Nova receita' }}</a>
+</div>
+
+{% if kind == 'receber' %}
+<nav class="tabs-dl"><a href="{{ url_for('vendas.index') }}">Vendas</a><a class="on" href="{{ url_for('vendas.receitas') }}">Outras receitas</a></nav>
+{% endif %}
+
+<div class="mb-3">{{ period_seg(period, request.endpoint, {'base': basis, 'status': status, 'categoria': cat_id, 'q': search}) }}</div>
+
+<form class="filters mb-3" method="get">
+  <input type="hidden" name="periodo" value="{{ period.key }}">
+  {% if period.key == 'personalizado' %}<input type="hidden" name="inicio" value="{{ period.start }}"><input type="hidden" name="fim" value="{{ period.end }}">{% endif %}
+  <div><label for="f-base">Data de referência</label>
+    <select class="form-select" id="f-base" name="base" data-autosubmit>
+      <option value="competencia" {{ 'selected' if basis == 'competencia' }}>Competência</option>
+      <option value="vencimento" {{ 'selected' if basis == 'vencimento' }}>Vencimento</option>
+    </select></div>
+  <div><label for="f-cat">Categoria</label>
+    <select class="form-select" id="f-cat" name="categoria" data-autosubmit>
+      <option value="">Todas</option>
+      {% for c in cats %}<option value="{{ c.id }}" {{ 'selected' if cat_id == c.id }}>{{ c.name }}{{ ' (inativa)' if not c.active }}</option>{% endfor %}
+    </select></div>
+  <div><label for="f-st">Situação</label>
+    <select class="form-select" id="f-st" name="status" data-autosubmit>
+      <option value="">Todas</option>
+      {% for k, l in [('pendente','A vencer'),('vencido','Vencidas'),('parcial','Em parte'),('liquidado','Liquidadas'),('cancelado','Canceladas')] %}
+      <option value="{{ k }}" {{ 'selected' if status == k }}>{{ l }}</option>{% endfor %}
+    </select></div>
+  <div><label for="f-q">Buscar</label><input class="form-control" id="f-q" name="q" value="{{ search }}" placeholder="Descrição ou {{ 'fornecedor' if kind == 'pagar' else 'origem' }}"></div>
+  <button class="btn btn-quiet" type="submit">Filtrar</button>
+</form>
+
+<section class="panel">
+  {% if rows %}
+  <div class="table-wrap">
+    <table class="table-dl">
+      <thead><tr><th>Competência</th><th>Descrição</th><th>Categoria</th><th>Vencimento</th><th class="num">Valor</th><th class="num">{{ 'Pago' if kind == 'pagar' else 'Recebido' }}</th><th class="num">Em aberto</th><th>Situação</th></tr></thead>
+      <tbody>
+      {% for t in rows %}
+        <tr class="{{ 'muted-row' if t.is_canceled }}">
+          <td>{{ t.competence_date|data }}</td>
+          <td><a class="row-link" href="{{ url_for('titulos.detail', title_id=t.id) }}">{{ t.description }}</a>
+            <span class="sub">{{ t.counterparty or '' }}{% if t.installment_label and t.origin not in ('venda','compra') %} · parcela {{ t.installment_label }}{% endif %}{% if t.recurrence_group %} · recorrente{% endif %}</span></td>
+          <td>{{ t.category.name }}</td>
+          <td>{{ t.due_date|data }}</td>
+          <td class="num">{{ t.amount|brl }}</td>
+          <td class="num">{{ t.settled_amount|brl }}</td>
+          <td class="num">{{ t.open_amount|brl }}</td>
+          <td>{{ title_status(t, ref) }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+      <tfoot><tr><td colspan="4">{{ rows|length }} lançamento{{ 's' if rows|length != 1 }} (cancelados fora do total)</td>
+        <td class="num">{{ totals.amount|brl }}</td><td class="num">{{ totals.settled|brl }}</td><td class="num">{{ totals.open|brl }}</td><td></td></tr></tfoot>
+    </table>
+  </div>
+  {% else %}
+    {{ empty('Nada por aqui neste período',
+             'Ajuste o período ou os filtros, ou registre ' ~ ('uma despesa' if kind == 'pagar' else 'uma receita') ~ ' agora.',
+             new_url, 'Registrar ' ~ ('despesa' if kind == 'pagar' else 'receita')) }}
+  {% endif %}
+</section>
+{% endblock %}

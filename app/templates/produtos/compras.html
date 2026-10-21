@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% from "_macros.html" import period_seg, empty, doc_status %}
+{% set page_title = "Compras de mercadorias" %}
+{% block content %}
+<div class="page-head">
+  <div><h1 class="page-title">Produtos e compras</h1>
+    <p class="page-sub">{{ period.label }}: {{ totals.total|brl }} em compras, {{ totals.paid|brl }} pagos, {{ totals.to_pay|brl }} a pagar.</p></div>
+  <div class="d-flex gap-2"><a class="btn btn-outline-brand" href="{{ url_for('produtos.new') }}"><i class="bi bi-plus-lg"></i> Novo produto</a>
+    <a class="btn btn-brand" href="{{ url_for('produtos.nova_compra') }}"><i class="bi bi-box-seam"></i> Registrar compra</a></div>
+</div>
+<nav class="tabs-dl"><a class="on" href="{{ url_for('produtos.compras') }}">Compras</a><a href="{{ url_for('produtos.index') }}">Produtos</a></nav>
+<div class="mb-3">{{ period_seg(period, 'produtos.compras', {'q': search}) }}</div>
+<section class="panel">
+  {% if rows %}
+  <div class="table-wrap"><table class="table-dl">
+    <thead><tr><th>Data</th><th>Fornecedor</th><th>Itens</th><th class="num">Total</th><th class="num">Pago</th><th class="num">A pagar</th><th>Pagamento</th></tr></thead>
+    <tbody>{% for p in rows %}
+      <tr class="{{ 'muted-row' if p.status == 'cancelada' }}">
+        <td><a class="row-link" href="{{ url_for('produtos.compra', purchase_id=p.id) }}">{{ p.purchase_date|data }}</a></td>
+        <td>{{ p.supplier or '—' }}</td>
+        <td>{{ p.items|map(attribute='description')|join(', ')|truncate(60) }}</td>
+        <td class="num">{{ p.total|brl }}</td><td class="num">{{ p.paid|brl }}</td><td class="num">{{ p.to_pay|brl }}</td>
+        <td>{{ doc_status(p.payment_status, statuses) }}</td>
+      </tr>{% endfor %}</tbody>
+    <tfoot><tr><td colspan="3">Total (sem canceladas)</td><td class="num">{{ totals.total|brl }}</td><td class="num">{{ totals.paid|brl }}</td><td class="num">{{ totals.to_pay|brl }}</td><td></td></tr></tfoot>
+  </table></div>
+  {% else %}
+    {{ empty('Nenhuma compra neste período', 'Compras de mercadorias para revenda ficam separadas das despesas operacionais. A saída de caixa só acontece quando a compra é paga.', url_for('produtos.nova_compra'), 'Registrar compra') }}
+  {% endif %}
+</section>
+{% endblock %}

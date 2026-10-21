@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf, money_field %}
+{% set page_title = p.name or "Novo produto" %}
+{% block content %}
+<div class="page-head">
+  <div><h1 class="page-title">{{ p.name or 'Novo produto' }}</h1>
+    <p class="page-sub">{% if p.id %}{{ 'Ativo' if p.active else 'Desativado' }} · cadastrado em {{ p.created_at|data }}{% else %}Dados básicos e custo de aquisição.{% endif %}</p></div>
+  <a class="btn btn-quiet" href="{{ url_for('produtos.index') }}"><i class="bi bi-arrow-left"></i> Produtos</a>
+</div>
+<div class="row g-4">
+  <div class="col-lg-{{ '6' if p.id else '8' }}">
+    <form method="post" class="panel">
+      {{ csrf() }}
+      <div class="form-section"><div class="row g-3">
+        <div class="col-md-8"><label class="form-label" for="name">Nome do produto</label><input class="form-control" id="name" name="name" required maxlength="120" value="{{ form.get('name', p.name or '') }}"></div>
+        <div class="col-md-4"><label class="form-label" for="code">Código interno</label><input class="form-control" id="code" name="code" maxlength="40" value="{{ form.get('code', p.code or '') }}"></div>
+        <div class="col-md-6"><label class="form-label" for="category">Categoria</label><input class="form-control" id="category" name="category" maxlength="80" value="{{ form.get('category', p.category or '') }}" placeholder="Ex.: Laços, Tiaras, Kits escolares"></div>
+        <div class="col-md-6"><label class="form-label" for="supplier">Fornecedor</label><input class="form-control" id="supplier" name="supplier" maxlength="120" value="{{ form.get('supplier', p.supplier or '') }}"></div>
+        <div class="col-md-6">{{ money_field('unit_cost', 'Custo unitário de aquisição', form.get('unit_cost', p.unit_cost|money_input if p.unit_cost is not none else ''), help='Atualizado automaticamente na última compra, se você marcar a opção.') }}</div>
+        <div class="col-md-6">{{ money_field('sale_price', 'Preço de venda sugerido', form.get('sale_price', p.sale_price|money_input if p.sale_price else '')) }}</div>
+        <div class="col-12"><label class="form-label" for="notes">Observações</label><textarea class="form-control" id="notes" name="notes" rows="2">{{ form.get('notes', p.notes or '') }}</textarea></div>
+      </div></div>
+      <div class="sticky-actions">
+        {% if p.id %}<button class="btn btn-quiet me-auto" type="submit" name="toggle" value="1" formnovalidate data-confirm="{{ 'Desativar' if p.active else 'Reativar' }} este produto?">{{ 'Desativar produto' if p.active else 'Reativar produto' }}</button>{% endif %}
+        <button class="btn btn-brand" type="submit">{{ 'Salvar alterações' if p.id else 'Cadastrar produto' }}</button>
+      </div>
+    </form>
+  </div>
+  {% if p.id %}
+  <div class="col-lg-6">
+    <section class="panel">
+      <div class="panel-head"><h2 class="section-title">Histórico de compras</h2></div>
+      {% if history %}
+      <div class="panel-body border-bottom"><div class="row text-center">
+        <div class="col"><div class="small-label">Qtd. comprada</div><div class="fw-bold">{{ stats.qty|num(0) }}</div></div>
+        <div class="col"><div class="small-label">Investido</div><div class="fw-bold">{{ stats.spent|brl }}</div></div>
+        <div class="col"><div class="small-label">Custo médio</div><div class="fw-bold">{{ stats.avg|brl if stats.avg else '—' }}</div></div>
+      </div></div>
+      <div class="table-wrap"><table class="table-dl">
+        <thead><tr><th>Data</th><th>Fornecedor</th><th class="num">Qtd.</th><th class="num">Custo unit.</th><th class="num">Total</th></tr></thead>
+        <tbody>{% for i, pu in history %}
+          <tr class="{{ 'muted-row' if pu.status == 'cancelada' }}"><td><a class="row-link" href="{{ url_for('produtos.compra', purchase_id=pu.id) }}">{{ pu.purchase_date|data }}</a></td>
+            <td>{{ pu.supplier or '—' }}</td><td class="num">{{ i.quantity|num(0) }}</td><td class="num">{{ i.unit_cost|brl }}</td><td class="num">{{ i.total|brl }}</td></tr>
+        {% endfor %}</tbody>
+      </table></div>
+      {% else %}<div class="panel-body text-muted">Nenhuma compra registrada para este produto.</div>{% endif %}
+    </section>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

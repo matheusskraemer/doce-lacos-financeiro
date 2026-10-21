@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% set page_title = "Relatórios" %}
+{% block content %}
+<div class="page-head">
+  <div><h1 class="page-title">Relatórios</h1><p class="page-sub">Todos calculados a partir dos lançamentos registrados, com filtros e exportação para CSV e Excel.</p></div>
+</div>
+<div class="row g-4">
+  {% set groups = [('Vendas e entradas', ['vendas','recebimentos','a_receber']), ('Gastos e compras', ['pagamentos','despesas_categoria','compras','a_pagar']), ('Caixa e resultado', ['fluxo_mensal','comparativo','resultado','movimentacoes'])] %}
+  {% for label, keys in groups %}
+  <div class="col-lg-4">
+    <section class="panel h-100">
+      <div class="panel-head"><h2 class="section-title">{{ label }}</h2></div>
+      {% for k, t, d in catalog if k in keys %}
+        <a class="report-card" href="{{ url_for('relatorios.show', key=k) }}"><strong>{{ t }}</strong><span>{{ d }}</span></a>
+      {% endfor %}
+    </section>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

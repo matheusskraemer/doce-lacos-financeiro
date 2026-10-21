@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf, reqkey, select_opts %}
+{% set page_title = "Nova compra" %}
+{% block content %}
+<div class="page-head">
+  <div><h1 class="page-title">Compra de mercadorias</h1>
+    <p class="page-sub">Para revenda. Fica separada das despesas operacionais nos relatórios.</p></div>
+</div>
+<form method="post" class="panel" data-once data-sale-form>
+  {{ csrf() }}{{ reqkey() }}
+  <div class="form-section"><div class="row g-3">
+    <div class="col-md-4"><label class="form-label" for="purchase_date">Data da compra</label>
+      <input class="form-control" type="date" id="purchase_date" name="purchase_date" required value="{{ form.get('purchase_date', today.isoformat()) }}"></div>
+    <div class="col-md-8"><label class="form-label" for="supplier">Fornecedor</label>
+      <input class="form-control" id="supplier" name="supplier" maxlength="120" value="{{ form.get('supplier', '') }}"></div>
+  </div></div>
+
+  <div class="form-section">
+    <h3>Itens</h3>
+    <div class="table-wrap"><table class="items-table w-100" data-items>
+      <thead><tr><th>Produto</th><th>Descrição</th><th class="text-end">Qtd.</th><th class="text-end">Custo unitário</th><th class="text-end">Total</th><th></th></tr></thead>
+      <tbody>
+        {% set n = [form.getlist('item_desc')|length if form.getlist else 0, 1]|max %}
+        {% for i in range(n) %}
+        <tr data-item-row>
+          <td><select class="form-select" name="item_product" data-product-select aria-label="Produto"><option value="">—</option>
+            {% for p in products %}<option value="{{ p.id }}" data-price="{{ p.unit_cost|money_input if p.unit_cost else '' }}" data-name="{{ p.name }}"
+              {{ 'selected' if form.getlist and form.getlist('item_product')[i]|default('') == p.id|string }}>{{ p.name }}</option>{% endfor %}</select></td>
+          <td><input class="form-control" name="item_desc" maxlength="160" aria-label="Descrição" value="{{ form.getlist('item_desc')[i] if form.getlist else '' }}"></td>
+          <td><input class="form-control text-end" name="item_qty" inputmode="decimal" size="4" aria-label="Quantidade" value="{{ form.getlist('item_qty')[i] if form.getlist else '1' }}" data-qty></td>
+          <td><input class="form-control input-money" name="item_price" inputmode="decimal" aria-label="Custo unitário" value="{{ form.getlist('item_price')[i] if form.getlist else '' }}" data-money data-price></td>
+          <td class="text-end num" data-line-total>R$ 0,00</td>
+          <td><button class="btn btn-sm btn-quiet" type="button" data-remove-item aria-label="Remover item"><i class="bi bi-x"></i></button></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table></div>
+    <button class="btn btn-sm btn-outline-brand mt-2" type="button" data-add-item><i class="bi bi-plus"></i> Adicionar item</button>
+    {% if not products %}<div class="form-text">Sem produtos cadastrados: descreva o item livremente ou <a href="{{ url_for('produtos.new') }}">cadastre produtos</a>.</div>{% endif %}
+    <div class="form-check mt-3"><input class="form-check-input" type="checkbox" id="update_cost" name="update_cost" value="1" checked>
+      <label class="form-check-label" for="update_cost">Atualizar o custo unitário dos produtos com os valores desta compra</label></div>
+    <div class="d-flex justify-content-end mt-2"><div class="text-end"><div class="small-label">Total da compra</div><div class="big-figure num" data-net>R$ 0,00</div></div></div>
+  </div>
+
+  <div class="form-section">
+    <h3>Pagamento</h3>
+    <div class="row g-2 mb-3">
+      <div class="col-md-6"><label class="choice"><input class="form-check-input" type="radio" name="paid_now" value="1" {% if form.get('paid_now') %}checked{% endif %} data-reveal="#now-fields" data-hide="#later-fields">
+        <span><strong>Paga agora</strong><small>Sai do saldo da conta escolhida na data da compra.</small></span></label></div>
+      <div class="col-md-6"><label class="choice"><input class="form-check-input" type="radio" name="paid_now" value="" {% if not form.get('paid_now') %}checked{% endif %} data-reveal="#later-fields" data-hide="#now-fields">
+        <span><strong>A pagar</strong><small>Vai para Contas a pagar; sai do caixa só quando for paga.</small></span></label></div>
+    </div>
+    <div class="row g-3">
+      <div class="col-md-4"><label class="form-label" for="method_id">Forma de pagamento</label><select class="form-select" id="method_id" name="method_id">{{ select_opts(methods, form.get('method_id', ''), '—') }}</select></div>
+      <div class="col-md-4"><label class="form-label" for="account_id">Conta</label><select class="form-select" id="account_id" name="account_id">{{ select_opts(accounts, form.get('account_id', accounts[0].id if accounts else ''), 'Escolha a conta') }}</select></div>
+    </div>
+    <div class="row g-3 mt-0" id="later-fields">
+      <div class="col-md-4"><label class="form-label" for="installments">Parcelas</label><input class="form-control" type="number" min="1" max="24" id="installments" name="installments" value="{{ form.get('installments', 1) }}"></div>
+      <div class="col-md-4"><label class="form-label" for="first_due_date">Primeiro vencimento</label><input class="form-control" type="date" id="first_due_date" name="first_due_date" value="{{ form.get('first_due_date', today.isoformat()) }}"></div>
+    </div>
+    <div id="now-fields"></div>
+  </div>
+  <div class="form-section"><label class="form-label" for="notes">Observações</label><textarea class="form-control" id="notes" name="notes" rows="2">{{ form.get('notes', '') }}</textarea></div>
+  <div class="sticky-actions">
+    <a class="btn btn-quiet me-auto" href="{{ url_for('produtos.compras') }}">Cancelar</a>
+    <button class="btn btn-brand" type="submit">Salvar compra</button>
+  </div>
+</form>
+{% endblock %}

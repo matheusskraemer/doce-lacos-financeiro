@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf, reqkey, money_field, select_opts, empty %}
+{% set page_title = "Transferências" %}
+{% block content %}
+<div class="page-head">
+  <div><h1 class="page-title">Transferências entre contas</h1>
+    <p class="page-sub">Movimentam o dinheiro entre contas próprias sem alterar receitas, despesas ou resultado.</p></div>
+  <a class="btn btn-quiet" href="{{ url_for('fluxo.index') }}"><i class="bi bi-arrow-left"></i> Fluxo de caixa</a>
+</div>
+<div class="row g-4">
+  <div class="col-lg-4">
+    <form method="post" class="panel" data-once>{{ csrf() }}{{ reqkey() }}
+      <div class="panel-head"><h2 class="section-title">Nova transferência</h2></div>
+      <div class="panel-body">
+        {% if accounts|length < 2 %}<p class="text-muted">Cadastre ao menos duas contas em <a href="{{ url_for('config.index', aba='contas') }}">Configurações</a>.</p>{% endif %}
+        <div class="mb-3"><label class="form-label" for="from">De</label><select class="form-select" id="from" name="from_account_id" required>{{ select_opts(accounts, '', 'Conta de origem') }}</select></div>
+        <div class="mb-3"><label class="form-label" for="to">Para</label><select class="form-select" id="to" name="to_account_id" required>{{ select_opts(accounts, '', 'Conta de destino') }}</select></div>
+        <div class="mb-3">{{ money_field('amount', 'Valor', required=True) }}</div>
+        <div class="mb-3"><label class="form-label" for="date">Data</label><input class="form-control" type="date" id="date" name="date" value="{{ today.isoformat() }}" required></div>
+        <div class="mb-3"><label class="form-label" for="notes">Observação</label><input class="form-control" id="notes" name="notes" maxlength="300" placeholder="Ex.: depósito do caixa no banco"></div>
+        <button class="btn btn-brand w-100" type="submit">Registrar transferência</button>
+      </div>
+    </form>
+  </div>
+  <div class="col-lg-8">
+    <section class="panel">
+      {% if rows %}
+      <div class="table-wrap"><table class="table-dl">
+        <thead><tr><th>Data</th><th>De → Para</th><th class="num">Valor</th><th></th></tr></thead>
+        <tbody>{% for t in rows %}
+          <tr class="{{ 'muted-row' if t.reversal }}">
+            <td>{{ t.date|data }}</td>
+            <td>{{ t.from_account.name }} → {{ t.to_account.name }}
+              {% if t.notes %}<span class="sub">{{ t.notes }}</span>{% endif %}
+              {% if t.reversal %}<span class="sub">Estornada em {{ t.reversal.date|data }}</span>{% endif %}</td>
+            <td class="num">{{ t.amount|brl }}</td>
+            <td class="text-end">{% if not t.reverses_id and not t.reversal %}
+              <button class="btn btn-link-danger small" type="button" data-bs-toggle="collapse" data-bs-target="#tr-{{ t.id }}">Estornar</button>{% endif %}</td>
+          </tr>
+          {% if not t.reverses_id and not t.reversal %}
+          <tr class="collapse" id="tr-{{ t.id }}"><td colspan="4">
+            <form class="d-flex gap-2" method="post" action="{{ url_for('fluxo.estornar_transferencia', transfer_id=t.id) }}">{{ csrf() }}
+              <input class="form-control" name="reason" required placeholder="Motivo do estorno" aria-label="Motivo do estorno">
+              <button class="btn btn-outline-danger" type="submit" data-confirm="Estornar esta transferência?">Estornar</button></form></td></tr>
+          {% endif %}
+        {% endfor %}</tbody>
+      </table></div>
+      {% else %}
+        {{ empty('Nenhuma transferência', 'Use transferências para depositar o dinheiro do caixa no banco ou mover saldo entre carteiras.') }}
+      {% endif %}
+    </section>
+  </div>
+</div>
+{% endblock %}

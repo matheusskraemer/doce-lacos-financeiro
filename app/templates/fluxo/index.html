@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% set page_title = "Fluxo de caixa" %}
+{% block content %}
+<div class="page-head">
+  <div><h1 class="page-title">Fluxo de caixa</h1>
+    <p class="page-sub">{{ start|data }} a {{ end|data }} · realizado até hoje, previsto a partir de hoje.</p></div>
+  <a class="btn btn-outline-brand" href="{{ url_for('fluxo.transferencias') }}"><i class="bi bi-arrow-left-right"></i> Transferências</a>
+</div>
+
+<form class="filters mb-4" method="get">
+  <div><label>Visão</label>
+    <nav class="seg">{% for k, l in [('dia','Por dia'),('semana','Por semana'),('mes','Por mês')] %}<a class="{{ 'on' if gran == k }}" href="{{ url_for('fluxo.index', visao=k) }}">{{ l }}</a>{% endfor %}</nav></div>
+  <input type="hidden" name="visao" value="{{ gran }}">
+  <div><label for="f-i">De</label><input class="form-control" type="date" id="f-i" name="inicio" value="{{ start.isoformat() }}"></div>
+  <div><label for="f-f">Até</label><input class="form-control" type="date" id="f-f" name="fim" value="{{ end.isoformat() }}"></div>
+  <button class="btn btn-quiet" type="submit">Aplicar</button>
+</form>
+
+<section class="metrics mb-4">
+  <div class="metric"><span class="label">Saldo inicial ({{ start|data }})</span><span class="value num text-start">{{ flow.opening|brl if flow.opening is not none else '—' }}</span><span class="hint">Saldo ao fim do dia anterior</span></div>
+  <div class="metric"><span class="label">Realizado</span><span class="value num text-start">{{ (flow.realized_in - flow.realized_out)|brl(sign=True) }}</span><span class="hint"><span class="amount-in">+{{ flow.realized_in|brl }}</span> · <span class="amount-out">−{{ flow.realized_out|brl }}</span></span></div>
+  <div class="metric"><span class="label">Saldo hoje</span><span class="value num text-start">{{ flow.balance_today|brl }}</span><span class="hint">Contas no saldo consolidado</span></div>
+  <div class="metric"><span class="label">Saldo projetado ({{ end|data }})</span><span class="value num text-start proj-val {{ 'amount-out' if flow.projected_closing is not none and flow.projected_closing < 0 }}">{{ flow.projected_closing|brl if flow.projected_closing is not none else '—' }}</span>
+    <span class="hint">+{{ flow.projected_in|brl }} previstos · −{{ flow.projected_out|brl }} previstos</span></div>
+</section>
+
+{% if flow.overdue_in or flow.overdue_out %}
+<div class="callout mb-4">Valores vencidos e ainda não liquidados entram como previstos no período de hoje: {{ flow.overdue_in|brl }} a receber e {{ flow.overdue_out|brl }} a pagar. Revise em <a href="{{ url_for('contas.receber', status='vencido') }}">Contas a receber</a> e <a href="{{ url_for('contas.pagar', status='vencido') }}">Contas a pagar</a>.</div>
+{% endif %}
+
+<section class="panel mb-4">
+  <div class="panel-head"><h2 class="section-title">Saldo realizado e projetado</h2><span class="small text-muted">Linha tracejada = projeção</span></div>
+  <div class="panel-body"><div class="chart-box"><canvas id="chart-flow" aria-label="Gráfico do fluxo de caixa"></canvas></div></div>
+</section>
+
+<section class="panel">
+  <div class="table-wrap"><table class="table-dl">
+    <thead><tr><th>{{ {'dia': 'Dia', 'semana': 'Semana', 'mes': 'Mês'}[gran] }}</th>
+      <th class="num">Entradas realizadas</th><th class="num">Saídas realizadas</th><th class="num">Saldo realizado</th>
+      <th class="num">Recebimentos previstos</th><th class="num">Pagamentos previstos</th><th class="num">Saldo projetado</th></tr></thead>
+    <tbody>
+    {% for r in flow.rows %}
+      <tr class="{{ 'is-proj' if r.is_future }} {{ 'is-today' if r.has_today }}">
+        <td>{{ r.label }}{% if r.has_today %} <span class="status st-open">hoje</span>{% endif %}</td>
+        <td class="num amount-in">{{ r.realized_in|brl if r.realized_in else '' }}</td>
+        <td class="num amount-out">{{ r.realized_out|brl if r.realized_out else '' }}</td>
+        <td class="num">{{ r.realized_balance|brl if r.realized_balance is not none else '' }}</td>
+        <td class="num proj-val">{{ r.projected_in|brl if r.projected_in else '' }}</td>
+        <td class="num proj-val">{{ r.projected_out|brl if r.projected_out else '' }}</td>
+        <td class="num proj-val fw-semibold">{{ r.projected_balance|brl if r.projected_balance is not none else '' }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+    <tfoot><tr><td>Total</td><td class="num">{{ flow.realized_in|brl }}</td><td class="num">{{ flow.realized_out|brl }}</td><td class="num">{{ flow.realized_closing|brl if flow.realized_closing is not none else '' }}</td>
+      <td class="num">{{ flow.projected_in|brl }}</td><td class="num">{{ flow.projected_out|brl }}</td><td class="num">{{ flow.projected_closing|brl if flow.projected_closing is not none else '' }}</td></tr></tfoot>
+  </table></div>
+</section>
+
+<section class="panel mt-4">
+  <div class="panel-head"><h2 class="section-title">Saldo por conta hoje</h2><a class="small" href="{{ url_for('config.index', aba='contas') }}">Gerenciar contas</a></div>
+  <div class="table-wrap"><table class="table-dl">
+    <thead><tr><th>Conta</th><th class="num">Saldo inicial</th><th class="num">Movimentações</th><th class="num">Transferências</th><th class="num">Saldo</th></tr></thead>
+    <tbody>{% for b in balances %}<tr class="{{ 'muted-row' if not b.account.active }}"><td>{{ b.account.name }}{% if not b.account.include_in_total %}<span class="sub">Fora do saldo consolidado</span>{% endif %}</td>
+      <td class="num">{{ b.opening|brl }}</td><td class="num">{{ b.movements|brl(sign=True) }}</td><td class="num">{{ b.transfers|brl(sign=True) }}</td><td class="num fw-semibold">{{ b.balance|brl }}</td></tr>{% endfor %}</tbody>
+  </table></div>
+</section>
+<script type="application/json" id="flow-data">{{ chart|tojson }}</script>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='vendor/chartjs/chart.umd.min.js') }}"></script>
+<script src="{{ url_for('static', filename='js/charts.js') }}?v=1"></script>
+{% endblock %}

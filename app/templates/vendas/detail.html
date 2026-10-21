@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf, doc_status, title_status, settle_form %}
+{% set page_title = sale.description %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <div class="small text-muted mb-1">Venda #{{ sale.id }} · {{ sale.sale_date|data }}</div>
+    <h1 class="page-title">{{ sale.description }}</h1>
+    <p class="page-sub">{{ sale.customer or 'Cliente não informado' }} · {{ doc_status(sale.receipt_status, statuses) }}</p>
+  </div>
+  <a class="btn btn-quiet" href="{{ url_for('vendas.index') }}"><i class="bi bi-arrow-left"></i> Vendas</a>
+</div>
+
+{% if sale.status == 'cancelada' %}
+<div class="flash flash-warning mb-4"><i class="bi bi-slash-circle"></i><div>Venda cancelada em {{ sale.canceled_at|data }}. Motivo: {{ sale.cancel_reason }}. Ela não entra nos totais de vendas.</div></div>
+{% endif %}
+
+<div class="row g-4">
+  <div class="col-lg-7">
+    <section class="panel mb-4">
+      <div class="panel-body">
+        <div class="row g-3">
+          <div class="col-sm-4"><div class="small-label">Valor líquido</div><div class="big-figure num text-start">{{ sale.net_amount|brl }}</div></div>
+          <div class="col-sm-4"><div class="small-label">Recebido</div><div class="big-figure num text-start amount-in">{{ sale.received|brl }}</div></div>
+          <div class="col-sm-4"><div class="small-label">A receber</div><div class="big-figure num text-start">{{ sale.to_receive|brl }}</div></div>
+        </div>
+      </div>
+      <div class="panel-foot">
+        <dl class="kv">
+          <dt>Valor bruto</dt><dd>{{ sale.gross_amount|brl }}</dd>
+          <dt>Desconto</dt><dd>{{ sale.discount|brl }}</dd>
+          <dt>Forma</dt><dd>{{ sale.payment_method.name if sale.payment_method else '—' }}</dd>
+          {% if sale.notes %}<dt>Observações</dt><dd>{{ sale.notes }}</dd>{% endif %}
+        </dl>
+      </div>
+    </section>
+
+    {% if sale.items %}
+    <section class="panel mb-4">
+      <div class="panel-head"><h2 class="section-title">Itens</h2></div>
+      <div class="table-wrap"><table class="table-dl">
+        <thead><tr><th>Produto</th><th class="num">Qtd.</th><th class="num">Preço</th><th class="num">Total</th></tr></thead>
+        <tbody>{% for i in sale.items %}<tr><td>{{ i.description }}</td><td class="num">{{ i.quantity|num(0) if i.quantity == i.quantity|int else i.quantity|num(3) }}</td><td class="num">{{ i.unit_price|brl }}</td><td class="num">{{ i.total|brl }}</td></tr>{% endfor %}</tbody>
+      </table></div>
+    </section>
+    {% endif %}
+
+    <section class="panel">
+      <div class="panel-head"><h2 class="section-title">Parcelas e recebimentos</h2></div>
+      <div class="table-wrap"><table class="table-dl">
+        <thead><tr><th>Parcela</th><th>Vencimento</th><th class="num">Valor</th><th class="num">Recebido</th><th class="num">Em aberto</th><th>Situação</th></tr></thead>
+        <tbody>
+        {% for t in sale.titles %}
+          <tr class="{{ 'muted-row' if t.is_canceled }}">
+            <td><a class="row-link" href="{{ url_for('titulos.detail', title_id=t.id) }}">{{ t.installment_no }}/{{ t.installment_count }}</a></td>
+            <td>{{ t.due_date|data }}</td><td class="num">{{ t.amount|brl }}</td><td class="num">{{ t.settled_amount|brl }}</td>
+            <td class="num">{{ t.open_amount|brl }}</td><td>{{ title_status(t, ref) }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table></div>
+    </section>
+  </div>
+
+  <div class="col-lg-5">
+    {% set next_open = sale.titles|selectattr('open_amount')|list %}
+    {% if sale.status == 'ativa' and next_open %}
+    <section class="panel mb-4">
+      <div class="panel-head"><h2 class="section-title">Receber parcela {{ next_open[0].installment_no }}/{{ next_open[0].installment_count }}</h2></div>
+      <div class="panel-body">{{ settle_form(next_open[0], accounts, methods, ref, next_url=url_for('vendas.detail', sale_id=sale.id)) }}</div>
+    </section>
+    {% endif %}
+
+    {% if sale.status == 'ativa' %}
+    <section class="panel mb-4">
+      <div class="panel-head"><h2 class="section-title">Dados da venda</h2></div>
+      <div class="panel-body">
+        <form method="post" action="{{ url_for('vendas.edit', sale_id=sale.id) }}" class="row g-2">
+          {{ csrf() }}
+          <div class="col-12"><label class="form-label" for="e-desc">Identificação</label><input class="form-control" id="e-desc" name="description" value="{{ sale.description }}" required maxlength="160"></div>
+          <div class="col-12"><label class="form-label" for="e-cust">Cliente</label><input class="form-control" id="e-cust" name="customer" value="{{ sale.customer or '' }}"></div>
+          <div class="col-12"><label class="form-label" for="e-notes">Observações</label><textarea class="form-control" id="e-notes" name="notes" rows="2">{{ sale.notes or '' }}</textarea></div>
+          <div class="col-12"><button class="btn btn-quiet" type="submit">Salvar dados</button>
+            <div class="form-text">Valores não são editáveis: para corrigir, cancele e registre de novo. Assim o histórico fica rastreável.</div></div>
+        </form>
+      </div>
+    </section>
+    <section class="panel">
+      <div class="panel-head"><h2 class="section-title">Cancelar venda</h2></div>
+      <div class="panel-body">
+        <form method="post" action="{{ url_for('vendas.cancel', sale_id=sale.id) }}" data-once>
+          {{ csrf() }}
+          <label class="form-label" for="c-reason">Motivo</label>
+          <input class="form-control mb-2" id="c-reason" name="reason" required maxlength="300" placeholder="Ex.: devolução, pedido desistido">
+          <label class="form-label" for="c-date">Data do estorno</label>
+          <input class="form-control mb-2" type="date" id="c-date" name="reversal_date" value="{{ ref.isoformat() }}">
+          <p class="form-text">{% if sale.received > 0 %}Os {{ sale.received|brl }} recebidos serão estornados na data acima.{% else %}Nada foi recebido; as parcelas são canceladas.{% endif %}</p>
+          <button class="btn btn-outline-danger" type="submit" data-confirm="Cancelar a venda “{{ sale.description }}”?">Cancelar venda</button>
+        </form>
+      </div>
+    </section>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

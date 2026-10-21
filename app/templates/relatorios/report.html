@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% from "_macros.html" import period_seg, empty %}
+{% set page_title = rep.title %}
+{% block content %}
+{% set args = request.args.to_dict() %}
+<div class="page-head">
+  <div><div class="small mb-1"><a href="{{ url_for('relatorios.index') }}">Relatórios</a></div>
+    <h1 class="page-title">{{ rep.title }}</h1>
+    <p class="page-sub">{{ rep.description }}{% if rep.key != 'comparativo' %} · {{ flt.start|data }} a {{ flt.end|data }}{% endif %}</p></div>
+  <div class="d-flex gap-2 no-print">
+    <a class="btn btn-quiet" href="{{ url_for('relatorios.export', key=rep.key, fmt='csv', **args) }}"><i class="bi bi-filetype-csv"></i> CSV</a>
+    <a class="btn btn-outline-brand" href="{{ url_for('relatorios.export', key=rep.key, fmt='xlsx', **args) }}"><i class="bi bi-file-earmark-excel"></i> Excel</a>
+  </div>
+</div>
+
+{% if rep.key == 'comparativo' %}
+<form class="filters mb-4" method="get">
+  <div><label for="ma">Mês A</label><input class="form-control" type="month" id="ma" name="mes_a" value="{{ request.args.get('mes_a', default_a) }}"></div>
+  <div><label for="mb">Mês B</label><input class="form-control" type="month" id="mb" name="mes_b" value="{{ request.args.get('mes_b', default_b) }}"></div>
+  <button class="btn btn-quiet" type="submit">Comparar</button>
+</form>
+{% else %}
+<div class="mb-3">{{ period_seg(period, 'relatorios.show', {'key': rep.key, 'categoria': flt.category_id, 'conta': flt.account_id, 'status': flt.status, 'q': flt.search, 'base': flt.basis}) }}</div>
+<form class="filters mb-4" method="get">
+  <input type="hidden" name="periodo" value="{{ period.key }}">
+  {% if period.key == 'personalizado' %}<input type="hidden" name="inicio" value="{{ period.start }}"><input type="hidden" name="fim" value="{{ period.end }}">{% endif %}
+  {% if rep.key in ('recebimentos','pagamentos','a_pagar','a_receber') %}
+  <div><label for="f-cat">Categoria</label><select class="form-select" id="f-cat" name="categoria" data-autosubmit><option value="">Todas</option>
+    {% set ck = 'receita' if rep.key in ('recebimentos','a_receber') else 'despesa' %}
+    {% for c in cats if c.kind == ck %}<option value="{{ c.id }}" {{ 'selected' if flt.category_id == c.id }}>{{ c.name }}</option>{% endfor %}</select></div>
+  {% endif %}
+  {% if rep.key in ('recebimentos','pagamentos','movimentacoes') %}
+  <div><label for="f-acc">Conta</label><select class="form-select" id="f-acc" name="conta" data-autosubmit><option value="">Todas</option>
+    {% for a in accounts %}<option value="{{ a.id }}" {{ 'selected' if flt.account_id == a.id }}>{{ a.name }}</option>{% endfor %}</select></div>
+  {% endif %}
+  {% if rep.key == 'despesas_categoria' %}
+  <div><label for="f-b">Base</label><select class="form-select" id="f-b" name="base" data-autosubmit>
+    <option value="caixa" {{ 'selected' if flt.basis == 'caixa' }}>Caixa (pagas)</option><option value="competencia" {{ 'selected' if flt.basis == 'competencia' }}>Competência (lançadas)</option></select></div>
+  {% endif %}
+  {% if rep.key in ('vendas','compras','a_pagar','a_receber') %}
+  <div><label for="f-st">Situação</label><select class="form-select" id="f-st" name="status" data-autosubmit><option value="">Todas</option>
+    {% if rep.key == 'vendas' %}{% set sts = [('recebida','Recebida'),('parcial','Em parte'),('a_receber','A receber'),('cancelada','Cancelada')] %}
+    {% elif rep.key == 'compras' %}{% set sts = [('paga','Paga'),('parcial','Em parte'),('a_pagar','A pagar'),('cancelada','Cancelada')] %}
+    {% else %}{% set sts = [('pendente','A vencer'),('vencido','Vencida'),('parcial','Em parte'),('liquidado','Liquidada'),('cancelado','Cancelada')] %}{% endif %}
+    {% for k, l in sts %}<option value="{{ k }}" {{ 'selected' if flt.status == k }}>{{ l }}</option>{% endfor %}</select></div>
+  {% endif %}
+  {% if rep.key not in ('fluxo_mensal','resultado','despesas_categoria') %}
+  <div><label for="f-q">Buscar</label><input class="form-control" id="f-q" name="q" value="{{ flt.search }}"></div>
+  {% endif %}
+  <button class="btn btn-quiet" type="submit">Filtrar</button>
+</form>
+{% endif %}
+
+<section class="panel">
+  {% if rep.rows %}
+  <div class="table-wrap"><table class="table-dl">
+    <thead><tr>{% for c in rep.columns %}<th class="{{ 'num' if c.kind == 'money' }}">{{ c.label }}</th>{% endfor %}</tr></thead>
+    <tbody>
+    {% for r in rep.rows %}
+      <tr class="{{ 'muted-row' if r._muted }}">
+        {% for c in rep.columns %}
+          {% set v = r[c.key] %}
+          {% if c.kind == 'money' %}
+            <td class="num {{ 'fw-bold' if r._strong }} {{ 'amount-out' if v != '' and v is not none and v < 0 }}">{{ v|brl if v != '' and v is not none else '' }}</td>
+          {% elif c.kind == 'date' %}<td>{{ v|data }}</td>
+          {% elif loop.index0 == 1 and r._url %}<td><a class="row-link" href="{{ url_for(r._url[0], **r._url[1]) }}">{{ v }}</a></td>
+          {% else %}<td class="{{ 'fw-bold' if r._strong }}">{{ v }}</td>{% endif %}
+        {% endfor %}
+      </tr>
+    {% endfor %}
+    </tbody>
+    {% if rep.totals %}
+    <tfoot><tr>{% for c in rep.columns %}<td class="{{ 'num' if c.kind == 'money' }}">{% if loop.first %}Total{% elif c.key in rep.totals %}{{ rep.totals[c.key]|brl }}{% endif %}</td>{% endfor %}</tr></tfoot>
+    {% endif %}
+  </table></div>
+  {% else %}
+    {{ empty('Sem dados para estes filtros', 'Não há lançamentos que atendam ao período e aos filtros escolhidos.') }}
+  {% endif %}
+</section>
+{% for n in rep.notes %}<p class="small text-muted mt-2 mb-0">{{ n }}</p>{% endfor %}
+{% endblock %}

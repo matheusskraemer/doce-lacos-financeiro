@@ -47,8 +47,8 @@
       <a class="{{ 'on' if period.key == key }}" href="{{ url_for(endpoint, periodo=key, **extra) }}">{{ label }}</a>
     {% endfor %}
   </nav>
-  <form class="d-flex gap-1 align-items-center" method="get" action="{{ url_for(endpoint) }}">
-    {% for k, v in extra.items() %}{% if v %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endif %}{% endfor %}
+  <form class="d-flex gap-1 align-items-center" method="get" action="{{ request.path }}">
+    {% for k, v in extra.items() %}{% if v and k != "key" %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endif %}{% endfor %}
     <input type="hidden" name="periodo" value="personalizado">
     <input class="form-control form-control-sm" type="date" name="inicio" value="{{ period.start.isoformat() }}" aria-label="Data inicial">
     <span class="text-muted small">a</span>

@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf, title_status, settle_form, money_field, select_opts %}
+{% set page_title = t.description %}
+{% block content %}
+{% set receive = t.kind == 'receber' %}
+<div class="page-head">
+  <div>
+    <div class="small text-muted mb-1">
+      {% if t.sale_id %}<a href="{{ url_for('vendas.detail', sale_id=t.sale_id) }}">Venda #{{ t.sale_id }}</a> ·
+      {% elif t.purchase_id %}<a href="{{ url_for('produtos.compra', purchase_id=t.purchase_id) }}">Compra #{{ t.purchase_id }}</a> ·
+      {% endif %}{{ t.origin_label }}{% if t.installment_label %} · parcela {{ t.installment_label }}{% endif %}
+    </div>
+    <h1 class="page-title">{{ t.description }}</h1>
+    <p class="page-sub">{{ 'A receber de' if receive else 'A pagar para' }} {{ t.counterparty or '—' }} · {{ title_status(t, ref) }}</p>
+  </div>
+  <a class="btn btn-quiet" href="{{ url_for('contas.receber' if receive else 'contas.pagar') }}"><i class="bi bi-arrow-left"></i> {{ 'Contas a receber' if receive else 'Contas a pagar' }}</a>
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-7">
+    <section class="panel mb-4">
+      <div class="panel-body">
+        <div class="row g-3 align-items-end">
+          <div class="col-sm-4"><div class="small-label">Valor</div><div class="big-figure num text-start">{{ t.amount|brl }}</div></div>
+          <div class="col-sm-4"><div class="small-label">{{ 'Recebido' if receive else 'Pago' }}</div><div class="big-figure num text-start amount-in">{{ t.settled_amount|brl }}</div></div>
+          <div class="col-sm-4"><div class="small-label">Em aberto</div><div class="big-figure num text-start {{ 'amount-out' if t.open_amount > 0 }}">{{ t.open_amount|brl }}</div></div>
+        </div>
+        {% if not t.is_canceled %}
+        <div class="progress-thin mt-3" role="img" aria-label="Percentual liquidado"><span data-width="{{ ((t.settled_amount / t.amount) * 100)|round(1) if t.amount else 0 }}"></span></div>
+        {% endif %}
+      </div>
+      <div class="panel-foot">
+        <dl class="kv">
+          <dt>Categoria</dt><dd>{{ t.category.name }}</dd>
+          <dt>Competência</dt><dd>{{ t.competence_date|data }}</dd>
+          <dt>Vencimento</dt><dd>{{ t.due_date|data }}</dd>
+          <dt>Forma prevista</dt><dd>{{ t.expected_method.name if t.expected_method else '—' }}</dd>
+          <dt>Conta prevista</dt><dd>{{ t.expected_account.name if t.expected_account else '—' }}</dd>
+          {% if t.notes %}<dt>Observações</dt><dd>{{ t.notes }}</dd>{% endif %}
+          {% if t.is_canceled %}<dt>Cancelado em</dt><dd>{{ t.canceled_at|data }} — {{ t.cancel_reason }}</dd>{% endif %}
+          <dt>Registrado em</dt><dd>{{ t.created_at|data }}</dd>
+        </dl>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><h2 class="section-title">Histórico de {{ 'recebimentos' if receive else 'pagamentos' }}</h2></div>
+      <div class="table-wrap">
+        <table class="table-dl">
+          <thead><tr><th>Data</th><th>Tipo</th><th>Conta</th><th>Forma</th><th class="num">Valor</th><th></th></tr></thead>
+          <tbody>
+          {% for s in t.settlements %}
+            <tr class="{{ 'muted-row' if s.reversal }}">
+              <td>{{ s.date|data }}</td>
+              <td>{% if s.is_reversal %}Estorno{% else %}{{ 'Recebimento' if receive else 'Pagamento' }}{% endif %}
+                {% if s.notes %}<span class="sub">{{ s.notes }}</span>{% endif %}
+                {% if s.reversal %}<span class="sub">Estornado em {{ s.reversal.date|data }}</span>{% endif %}</td>
+              <td>{{ s.account.name }}</td>
+              <td>{{ s.payment_method.name if s.payment_method else '—' }}</td>
+              <td class="num">{{ (-s.amount if s.is_reversal else s.amount)|brl }}</td>
+              <td class="text-end">
+                {% if not s.is_reversal and not s.reversal %}
+                <button class="btn btn-link-danger small" type="button" data-bs-toggle="collapse" data-bs-target="#rev-{{ s.id }}">Estornar</button>
+                {% endif %}
+              </td>
+            </tr>
+            {% if not s.is_reversal and not s.reversal %}
+            <tr class="collapse" id="rev-{{ s.id }}"><td colspan="6">
+              <form class="row g-2 align-items-end" method="post" action="{{ url_for('titulos.reverse', settlement_id=s.id) }}" data-once>
+                {{ csrf() }}
+                <div class="col-md-6"><label class="form-label" for="rr-{{ s.id }}">Motivo do estorno</label><input class="form-control" id="rr-{{ s.id }}" name="reason" required maxlength="300"></div>
+                <div class="col-md-3"><label class="form-label" for="rd-{{ s.id }}">Data</label><input class="form-control" type="date" id="rd-{{ s.id }}" name="date" value="{{ ref.isoformat() }}"></div>
+                <div class="col-md-3"><button class="btn btn-outline-danger w-100" type="submit" data-confirm="Estornar {{ s.amount|brl }}? O valor volta a ficar em aberto e o saldo da conta é ajustado.">Confirmar estorno</button></div>
+              </form>
+            </td></tr>
+            {% endif %}
+          {% else %}
+            <tr><td colspan="6" class="text-muted">Nenhum {{ 'recebimento' if receive else 'pagamento' }} registrado.</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <div class="col-lg-5">
+    {% if not t.is_canceled and t.open_amount > 0 %}
+    <section class="panel mb-4">
+      <div class="panel-head"><h2 class="section-title">{{ 'Registrar recebimento' if receive else 'Registrar pagamento' }}</h2></div>
+      <div class="panel-body">{{ settle_form(t, accounts, methods, ref) }}</div>
+    </section>
+    {% endif %}
+
+    {% if not t.is_canceled %}
+    <section class="panel mb-4">
+      <div class="panel-head"><h2 class="section-title">Editar</h2>
+        <button class="btn btn-sm btn-quiet" type="button" data-bs-toggle="collapse" data-bs-target="#edit-box">Mostrar</button></div>
+      <div class="collapse" id="edit-box"><div class="panel-body">
+        <form method="post" action="{{ url_for('titulos.edit', title_id=t.id) }}" class="row g-2">
+          {{ csrf() }}
+          <div class="col-12"><label class="form-label" for="e-desc">Descrição</label><input class="form-control" id="e-desc" name="description" value="{{ t.description }}" required maxlength="160"></div>
+          <div class="col-sm-6"><label class="form-label" for="e-cat">Categoria</label>
+            <select class="form-select" id="e-cat" name="category_id">{% for c in cats %}<option value="{{ c.id }}" {{ 'selected' if c.id == t.category_id }}>{{ c.name }}</option>{% endfor %}
+              {% if t.category not in cats %}<option value="{{ t.category_id }}" selected>{{ t.category.name }} (inativa)</option>{% endif %}</select></div>
+          <div class="col-sm-6"><label class="form-label" for="e-cp">{{ 'Cliente' if receive else 'Fornecedor' }}</label><input class="form-control" id="e-cp" name="counterparty" value="{{ t.counterparty or '' }}"></div>
+          <div class="col-sm-6"><label class="form-label" for="e-comp">Competência</label><input class="form-control" type="date" id="e-comp" name="competence_date" value="{{ t.competence_date.isoformat() }}"></div>
+          <div class="col-sm-6"><label class="form-label" for="e-due">Vencimento</label><input class="form-control" type="date" id="e-due" name="due_date" value="{{ t.due_date.isoformat() }}"></div>
+          <div class="col-sm-6">{{ money_field('amount', 'Valor', t.amount|money_input, required=True, id='e-amt') }}
+            {% if t.origin in ('venda', 'compra') %}<div class="form-text">Valor definido pela {{ 'venda' if t.origin == 'venda' else 'compra' }}.</div>{% endif %}</div>
+          <div class="col-sm-6"><label class="form-label" for="e-pm">Forma prevista</label><select class="form-select" id="e-pm" name="method_id">{{ select_opts(methods, t.expected_method_id, '—') }}</select></div>
+          <div class="col-12"><label class="form-label" for="e-acc">Conta prevista</label><select class="form-select" id="e-acc" name="account_id">{{ select_opts(accounts, t.expected_account_id, '—') }}</select></div>
+          <div class="col-12"><label class="form-label" for="e-notes">Observações</label><textarea class="form-control" id="e-notes" name="notes" rows="2">{{ t.notes or '' }}</textarea></div>
+          <div class="col-12"><button class="btn btn-brand" type="submit">Salvar alterações</button></div>
+        </form>
+      </div></div>
+    </section>
+
+    {% if not t.sale_id and not t.purchase_id %}
+    <section class="panel">
+      <div class="panel-head"><h2 class="section-title">Cancelar ou excluir</h2></div>
+      <div class="panel-body">
+        <form method="post" action="{{ url_for('titulos.cancel', title_id=t.id) }}" class="mb-3" data-once>
+          {{ csrf() }}
+          <label class="form-label" for="c-reason">Motivo do cancelamento</label>
+          <input class="form-control mb-2" id="c-reason" name="reason" required maxlength="300">
+          {% if t.settled_amount > 0 %}
+          <div class="form-check mb-2"><input class="form-check-input" type="checkbox" id="c-rev" name="reverse_payments" value="1" checked>
+            <label class="form-check-label" for="c-rev">Estornar os {{ t.settled_amount|brl }} já {{ 'recebidos' if receive else 'pagos' }}</label></div>
+          <input type="hidden" name="reversal_date" value="{{ ref.isoformat() }}">
+          {% endif %}
+          <button class="btn btn-outline-danger" type="submit" data-confirm="Cancelar este lançamento? Ele continua no histórico, mas deixa de contar nos totais.">Cancelar lançamento</button>
+        </form>
+        {% if not t.settlements %}
+        <form method="post" action="{{ url_for('titulos.delete', title_id=t.id) }}">
+          {{ csrf() }}
+          <button class="btn-link-danger" type="submit" data-confirm="Excluir definitivamente? Esta ação não pode ser desfeita.">Excluir definitivamente</button>
+          <div class="form-text">Disponível porque não há nenhuma movimentação de caixa ligada a este lançamento.</div>
+        </form>
+        {% endif %}
+      </div>
+    </section>
+    {% else %}
+    <p class="small text-muted">Parcelas de {{ 'vendas' if t.sale_id else 'compras' }} são canceladas pela própria {{ 'venda' if t.sale_id else 'compra' }}.</p>
+    {% endif %}
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

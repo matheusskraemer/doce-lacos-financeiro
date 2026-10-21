@@ -57,6 +57,8 @@ def _register_template_helpers(app: Flask) -> None:
     app.jinja_env.filters["num"] = number_br
     app.jinja_env.filters["money_input"] = lambda v: "" if v is None else f"{v:.2f}".replace(".", ",")
 
+    app.jinja_env.globals["new_request_key"] = lambda: secrets.token_urlsafe(24)
+
     @app.context_processor
     def inject_globals():
         settings = None
@@ -67,7 +69,6 @@ def _register_template_helpers(app: Flask) -> None:
         return {
             "company": settings,
             "today": today(),
-            "new_request_key": lambda: secrets.token_urlsafe(24),
             "csp_nonce": getattr(g, "csp_nonce", ""),
         }
 

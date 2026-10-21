@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf, doc_status, title_status, settle_form %}
+{% set page_title = "Compra #" ~ p.id %}
+{% block content %}
+<div class="page-head">
+  <div><div class="small text-muted mb-1">Compra #{{ p.id }} · {{ p.purchase_date|data }}</div>
+    <h1 class="page-title">Compra de mercadorias{% if p.supplier %} — {{ p.supplier }}{% endif %}</h1>
+    <p class="page-sub">{{ doc_status(p.payment_status, statuses) }}</p></div>
+  <a class="btn btn-quiet" href="{{ url_for('produtos.compras') }}"><i class="bi bi-arrow-left"></i> Compras</a>
+</div>
+{% if p.status == 'cancelada' %}<div class="flash flash-warning mb-4"><i class="bi bi-slash-circle"></i><div>Cancelada em {{ p.canceled_at|data }}. Motivo: {{ p.cancel_reason }}.</div></div>{% endif %}
+<div class="row g-4">
+  <div class="col-lg-7">
+    <section class="panel mb-4"><div class="panel-body"><div class="row g-3">
+      <div class="col-4"><div class="small-label">Total</div><div class="big-figure num text-start">{{ p.total|brl }}</div></div>
+      <div class="col-4"><div class="small-label">Pago</div><div class="big-figure num text-start amount-in">{{ p.paid|brl }}</div></div>
+      <div class="col-4"><div class="small-label">A pagar</div><div class="big-figure num text-start">{{ p.to_pay|brl }}</div></div>
+    </div></div>{% if p.notes %}<div class="panel-foot">{{ p.notes }}</div>{% endif %}</section>
+    <section class="panel mb-4"><div class="panel-head"><h2 class="section-title">Itens</h2></div>
+      <div class="table-wrap"><table class="table-dl"><thead><tr><th>Item</th><th class="num">Qtd.</th><th class="num">Custo unit.</th><th class="num">Total</th></tr></thead>
+        <tbody>{% for i in p.items %}<tr><td>{% if i.product_id %}<a class="row-link" href="{{ url_for('produtos.detail', product_id=i.product_id) }}">{{ i.description }}</a>{% else %}{{ i.description }}{% endif %}</td>
+          <td class="num">{{ i.quantity|num(0) if i.quantity == i.quantity|int else i.quantity|num(3) }}</td><td class="num">{{ i.unit_cost|brl }}</td><td class="num">{{ i.total|brl }}</td></tr>{% endfor %}</tbody></table></div></section>
+    <section class="panel"><div class="panel-head"><h2 class="section-title">Parcelas e pagamentos</h2></div>
+      <div class="table-wrap"><table class="table-dl"><thead><tr><th>Parcela</th><th>Vencimento</th><th class="num">Valor</th><th class="num">Pago</th><th class="num">Em aberto</th><th>Situação</th></tr></thead>
+        <tbody>{% for t in p.titles %}<tr class="{{ 'muted-row' if t.is_canceled }}"><td><a class="row-link" href="{{ url_for('titulos.detail', title_id=t.id) }}">{{ t.installment_no }}/{{ t.installment_count }}</a></td>
+          <td>{{ t.due_date|data }}</td><td class="num">{{ t.amount|brl }}</td><td class="num">{{ t.settled_amount|brl }}</td><td class="num">{{ t.open_amount|brl }}</td><td>{{ title_status(t, ref) }}</td></tr>{% endfor %}</tbody></table></div></section>
+  </div>
+  <div class="col-lg-5">
+    {% set next_open = p.titles|selectattr('open_amount')|list %}
+    {% if p.status == 'ativa' and next_open %}
+    <section class="panel mb-4"><div class="panel-head"><h2 class="section-title">Pagar parcela {{ next_open[0].installment_no }}/{{ next_open[0].installment_count }}</h2></div>
+      <div class="panel-body">{{ settle_form(next_open[0], accounts, methods, ref, next_url=url_for('produtos.compra', purchase_id=p.id)) }}</div></section>
+    {% endif %}
+    {% if p.status == 'ativa' %}
+    <section class="panel"><div class="panel-head"><h2 class="section-title">Cancelar compra</h2></div><div class="panel-body">
+      <form method="post" action="{{ url_for('produtos.cancelar_compra', purchase_id=p.id) }}" data-once>{{ csrf() }}
+        <label class="form-label" for="c-reason">Motivo</label><input class="form-control mb-2" id="c-reason" name="reason" required maxlength="300">
+        <label class="form-label" for="c-date">Data do estorno</label><input class="form-control mb-2" type="date" id="c-date" name="reversal_date" value="{{ ref.isoformat() }}">
+        <p class="form-text">{% if p.paid > 0 %}Os {{ p.paid|brl }} pagos serão estornados.{% else %}Nada foi pago; as parcelas são canceladas.{% endif %}</p>
+        <button class="btn btn-outline-danger" type="submit" data-confirm="Cancelar esta compra?">Cancelar compra</button>
+      </form></div></section>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

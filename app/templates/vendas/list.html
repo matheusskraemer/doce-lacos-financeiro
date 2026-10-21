@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% from "_macros.html" import period_seg, empty, doc_status %}
+{% set page_title = "Vendas" %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1 class="page-title">Vendas e receitas</h1>
+    <p class="page-sub">{{ period.label }}: {{ totals.count }} venda{{ 's' if totals.count != 1 }}, {{ totals.net|brl }} vendidos, {{ totals.received|brl }} já recebidos.</p>
+  </div>
+  <a class="btn btn-brand" href="{{ url_for('vendas.new') }}"><i class="bi bi-plus-lg"></i> Nova venda</a>
+</div>
+<nav class="tabs-dl"><a class="on" href="{{ url_for('vendas.index') }}">Vendas</a><a href="{{ url_for('vendas.receitas') }}">Outras receitas</a></nav>
+
+<div class="mb-3">{{ period_seg(period, 'vendas.index', {'status': status, 'q': search}) }}</div>
+<form class="filters mb-3" method="get">
+  <input type="hidden" name="periodo" value="{{ period.key }}">
+  {% if period.key == 'personalizado' %}<input type="hidden" name="inicio" value="{{ period.start }}"><input type="hidden" name="fim" value="{{ period.end }}">{% endif %}
+  <div><label for="f-st">Recebimento</label>
+    <select class="form-select" id="f-st" name="status" data-autosubmit>
+      <option value="">Todas</option>
+      {% for k, l in statuses.items() %}<option value="{{ k }}" {{ 'selected' if status == k }}>{{ l }}</option>{% endfor %}
+    </select></div>
+  <div><label for="f-q">Buscar</label><input class="form-control" id="f-q" name="q" value="{{ search }}" placeholder="Venda ou cliente"></div>
+  <button class="btn btn-quiet" type="submit">Filtrar</button>
+</form>
+
+<section class="panel">
+  {% if rows %}
+  <div class="table-wrap">
+    <table class="table-dl">
+      <thead><tr><th>Data</th><th>Venda</th><th>Cliente</th><th class="num">Líquido</th><th class="num">Recebido</th><th class="num">A receber</th><th>Recebimento</th></tr></thead>
+      <tbody>
+      {% for s in rows %}
+        <tr class="{{ 'muted-row' if s.status == 'cancelada' }}">
+          <td>{{ s.sale_date|data }}</td>
+          <td><a class="row-link" href="{{ url_for('vendas.detail', sale_id=s.id) }}">{{ s.description }}</a>
+            <span class="sub">{% if s.discount > 0 %}{{ s.gross_amount|brl }} − {{ s.discount|brl }} de desconto{% endif %}{% if s.titles|length > 1 %}{{ ' · ' if s.discount > 0 }}{{ s.titles|length }} parcelas{% endif %}</span></td>
+          <td>{{ s.customer or '—' }}</td>
+          <td class="num">{{ s.net_amount|brl }}</td>
+          <td class="num">{{ s.received|brl }}</td>
+          <td class="num">{{ s.to_receive|brl }}</td>
+          <td>{{ doc_status(s.receipt_status, statuses) }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+      <tfoot><tr><td colspan="3">Total (sem canceladas)</td><td class="num">{{ totals.net|brl }}</td><td class="num">{{ totals.received|brl }}</td><td class="num">{{ totals.to_receive|brl }}</td><td></td></tr></tfoot>
+    </table>
+  </div>
+  {% else %}
+    {{ empty('Nenhuma venda neste período', 'Registre a primeira venda: à vista entra direto no saldo; a prazo fica em Contas a receber até o pagamento.', url_for('vendas.new'), 'Registrar venda') }}
+  {% endif %}
+</section>
+{% endblock %}

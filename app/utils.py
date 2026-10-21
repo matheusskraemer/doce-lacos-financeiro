@@ -154,6 +154,8 @@ def fmt_date(d) -> str:
     if not d:
         return "—"
     if isinstance(d, datetime):
+        if d.tzinfo is not None:
+            d = d.astimezone(ZoneInfo("America/Sao_Paulo"))
         return d.strftime("%d/%m/%Y %H:%M")
     return d.strftime("%d/%m/%Y")
 

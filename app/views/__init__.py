@@ -2,10 +2,10 @@
 from __future__ import annotations
 
 from flask import Flask, request
-from flask_login import login_required
+from flask_login import current_user
 from sqlalchemy import select
 
-from ..extensions import db
+from ..extensions import db, login_manager
 from ..models import Account, Category, PaymentMethod, Product
 from ..utils import ValidationError, parse_date, parse_money, today
 
@@ -13,17 +13,18 @@ from ..utils import ValidationError, parse_date, parse_money, today
 def register_views(app: Flask) -> None:
     from . import (brand, config_views, contas, dashboard, despesas, fluxo, produtos, relatorios, titulos, vendas)
 
+    protected = set()
     for mod in (dashboard, vendas, despesas, produtos, contas, titulos, fluxo, relatorios, config_views):
-        bp = mod.bp
-        # Todas as rotas dessas áreas exigem login.
-        bp.before_request(_require_login)
-        app.register_blueprint(bp)
+        app.register_blueprint(mod.bp)
+        protected.add(mod.bp.name)
     app.register_blueprint(brand.bp)
 
-
-@login_required
-def _require_login():
-    return None
+    @app.before_request
+    def _require_login():
+        # Todas as rotas dessas áreas exigem login (inclusive POST).
+        if request.blueprint in protected and not current_user.is_authenticated:
+            return login_manager.unauthorized()
+        return None
 
 
 # --------------------------------------------------------------------------- listas para formulários

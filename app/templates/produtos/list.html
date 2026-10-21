@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% from "_macros.html" import empty %}
+{% set page_title = "Produtos" %}
+{% block content %}
+<div class="page-head">
+  <div><h1 class="page-title">Produtos e compras</h1><p class="page-sub">Cadastro dos produtos e custo de aquisição.</p></div>
+  <div class="d-flex gap-2"><a class="btn btn-outline-brand" href="{{ url_for('produtos.new') }}"><i class="bi bi-plus-lg"></i> Novo produto</a>
+    <a class="btn btn-brand" href="{{ url_for('produtos.nova_compra') }}"><i class="bi bi-box-seam"></i> Registrar compra</a></div>
+</div>
+<nav class="tabs-dl"><a href="{{ url_for('produtos.compras') }}">Compras</a><a class="on" href="{{ url_for('produtos.index') }}">Produtos</a></nav>
+<form class="filters mb-3" method="get">
+  <div><label for="f-q">Buscar</label><input class="form-control" id="f-q" name="q" value="{{ search }}" placeholder="Nome, código, categoria, fornecedor"></div>
+  <div><label for="f-m">Mostrar</label><select class="form-select" id="f-m" name="mostrar" data-autosubmit>
+    <option value="ativos" {{ 'selected' if show == 'ativos' }}>Ativos</option><option value="todos" {{ 'selected' if show == 'todos' }}>Todos</option></select></div>
+  <button class="btn btn-quiet" type="submit">Filtrar</button>
+</form>
+<section class="panel">
+  {% if rows %}
+  <div class="table-wrap"><table class="table-dl">
+    <thead><tr><th>Produto</th><th>Categoria</th><th>Fornecedor</th><th class="num">Custo unitário</th><th class="num">Preço sugerido</th><th class="num">Margem bruta</th><th class="num">Qtd. comprada</th></tr></thead>
+    <tbody>
+    {% for p in rows %}
+      <tr class="{{ 'muted-row' if not p.active }}">
+        <td><a class="row-link" href="{{ url_for('produtos.detail', product_id=p.id) }}">{{ p.name }}</a>{% if p.code %}<span class="sub">{{ p.code }}</span>{% endif %}</td>
+        <td>{{ p.category or '—' }}</td><td>{{ p.supplier or '—' }}</td>
+        <td class="num">{{ p.unit_cost|brl }}</td>
+        <td class="num">{{ p.sale_price|brl if p.sale_price else '—' }}</td>
+        <td class="num">{% if p.sale_price and p.sale_price > 0 %}{{ (((p.sale_price - p.unit_cost) / p.sale_price) * 100)|num(1) }}%{% else %}—{% endif %}</td>
+        <td class="num">{{ (bought.get(p.id) or 0)|num(0) }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% else %}
+    {{ empty('Nenhum produto cadastrado', 'Cadastre laços, tiaras e kits com o custo de aquisição para acompanhar quanto cada compra custou.', url_for('produtos.new'), 'Cadastrar produto') }}
+  {% endif %}
+</section>
+<p class="small text-muted mt-2">Margem bruta = (preço sugerido − custo) ÷ preço sugerido. Não considera taxas, frete nem impostos.</p>
+{% endblock %}
