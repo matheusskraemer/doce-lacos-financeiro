@@ -11,7 +11,7 @@
   };
   var palette = [C.brand, C.accent, C.proj, "#7C9A86", "#C27C8F", "#8C7AA8", "#B5A27A", "#6E8FA0"];
   var brl = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
-  var compact = new Intl.NumberFormat("pt-BR", { notation: "compact", maximumFractionDigits: 1 });
+  var compact = new Intl.NumberFormat("pt-BR", { notation: "compact", maximumFractionDigits: 2 });
 
   Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
   Chart.defaults.font.size = 12;
@@ -79,12 +79,12 @@
       data: { labels: f.labels, datasets: [
         { type: "line", label: "Saldo realizado", data: f.realized, borderColor: C.ink, backgroundColor: C.ink, pointRadius: 0, borderWidth: 2, tension: .2, spanGaps: false },
         { type: "line", label: "Saldo projetado", data: f.projected, borderColor: C.proj, backgroundColor: C.proj, borderDash: [6, 4], pointRadius: 0, borderWidth: 2, tension: .2 },
-        { type: "bar", label: "Entradas", data: f.in, backgroundColor: C.pos, maxBarThickness: 14, borderRadius: 2 },
-        { type: "bar", label: "Saídas", data: f.out.map(function (x) { return -x; }), backgroundColor: C.neg, maxBarThickness: 14, borderRadius: 2 },
-        { type: "bar", label: "Previsto a receber", data: f.pin, backgroundColor: "rgba(46,122,90,.28)", maxBarThickness: 14, borderRadius: 2 },
-        { type: "bar", label: "Previsto a pagar", data: f.pout.map(function (x) { return -x; }), backgroundColor: "rgba(174,59,74,.28)", maxBarThickness: 14, borderRadius: 2 },
+        { type: "bar", label: "Entradas", data: f.in, backgroundColor: C.pos, maxBarThickness: 14, borderRadius: 2, yAxisID: "y1" },
+        { type: "bar", label: "Saídas", data: f.out.map(function (x) { return -x; }), backgroundColor: C.neg, maxBarThickness: 14, borderRadius: 2, yAxisID: "y1" },
+        { type: "bar", label: "Previsto a receber", data: f.pin, backgroundColor: "rgba(46,122,90,.28)", maxBarThickness: 14, borderRadius: 2, yAxisID: "y1" },
+        { type: "bar", label: "Previsto a pagar", data: f.pout.map(function (x) { return -x; }), backgroundColor: "rgba(174,59,74,.28)", maxBarThickness: 14, borderRadius: 2, yAxisID: "y1" },
       ] },
-      options: { interaction: { mode: "index", intersect: false }, scales: { x: Object.assign({ stacked: true }, xPlain), y: yMoney } },
+      options: { interaction: { mode: "index", intersect: false }, scales: { x: Object.assign({ stacked: true }, xPlain), y: yMoney, y1: Object.assign({}, yMoney, { position: "right", grid: { display: false } }) } },
     });
   }
 })();

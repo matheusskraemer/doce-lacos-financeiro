@@ -1,0 +1,32 @@
+# Blueprint do Render (Infraestrutura como código).
+# Antes de aplicar, confira no painel do Render os nomes de planos e regiões vigentes.
+services:
+  - type: web
+    name: doce-lacos-financeiro
+    runtime: python
+    plan: starter
+    region: virginia
+    buildCommand: pip install -r requirements.txt
+    preDeployCommand: flask --app wsgi db upgrade && flask --app wsgi setup
+    startCommand: gunicorn wsgi:app --workers 2 --bind 0.0.0.0:$PORT --access-logfile -
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.13.1"
+      - key: APP_ENV
+        value: production
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: doce-lacos-db
+          property: connectionString
+
+databases:
+  - name: doce-lacos-db
+    plan: basic-256mb
+    region: virginia
+    databaseName: docelacos
+    user: docelacos
+    ipAllowList: []   # sem acesso externo ao banco; só a aplicação no Render

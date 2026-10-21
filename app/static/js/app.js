@@ -99,8 +99,8 @@
     function recalc() {
       var sum = 0, hasItems = false;
       tbody.querySelectorAll("[data-item-row]").forEach(function (row) {
-        var q = parseBR(row.querySelector("[data-qty]").value || "1");
-        var p = parseBR(row.querySelector("[data-price]").value);
+        var q = parseBR(row.querySelector("input[data-qty]").value || "1");
+        var p = parseBR(row.querySelector("input[data-price]").value);
         var desc = row.querySelector("[name=item_desc]").value.trim();
         var prod = row.querySelector("[data-product-select]").value;
         var line = q * p;
@@ -121,7 +121,7 @@
       var sel = row.querySelector("[data-product-select]");
       sel.addEventListener("change", function () {
         var opt = sel.selectedOptions[0];
-        var price = row.querySelector("[data-price]");
+        var price = row.querySelector("input[data-price]");
         var desc = row.querySelector("[name=item_desc]");
         if (opt && opt.value) {
           if (!desc.value.trim()) desc.value = opt.getAttribute("data-name") || "";

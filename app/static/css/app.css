@@ -238,7 +238,7 @@ a.metric:hover { background: var(--brand-softer); }
 .table-dl tr.muted-row td .row-link { color: var(--faint); text-decoration: line-through; }
 .table-dl .sub { display: block; font-size: .8rem; color: var(--muted); font-weight: 400; }
 .table-dl tr.is-proj td { background: var(--proj-soft); }
-.table-dl tr.is-today td { box-shadow: inset 3px 0 0 var(--accent); }
+.table-dl tr.is-today td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
 .amount-in { color: var(--pos); }
 .amount-out { color: var(--neg); }
 .proj-val { color: var(--proj); font-style: italic; }
@@ -266,7 +266,10 @@ a.metric:hover { background: var(--brand-softer); }
 .choice:has(input:checked) { border-color: var(--brand); background: var(--brand-softer); box-shadow: inset 0 0 0 1px var(--brand); }
 .choice .form-check-input { margin-top: .2rem; flex: none; }
 .choice small { display: block; color: var(--muted); }
+.items-table { min-width: 640px; }
 .items-table td { padding: .35rem .3rem; border: 0; }
+.items-table td:nth-child(3) { width: 80px; }
+.items-table td:nth-child(4) { width: 140px; }
 .items-table th { font-size: .78rem; color: var(--muted); font-weight: 700; padding: .3rem; }
 .sticky-actions { position: sticky; bottom: 0; background: rgba(255,255,255,.96); border-top: 1px solid var(--line); padding: .85rem 1.25rem; display: flex; gap: .6rem; justify-content: flex-end; border-radius: 0 0 var(--radius-lg) var(--radius-lg); }
 .total-line { display: flex; justify-content: space-between; font-size: .95rem; padding: .2rem 0; }
@@ -344,6 +347,9 @@ a.metric:hover { background: var(--brand-softer); }
   .login-art { display: none; }
   .fab { display: inline-flex; position: fixed; right: 1rem; bottom: 1rem; z-index: 30; width: 56px; height: 56px; border-radius: 50%; align-items: center; justify-content: center; font-size: 1.6rem; box-shadow: 0 8px 20px rgba(var(--brand-rgb), .35); }
   .topbar .new-entry { display: none; }
+  .sticky-actions { position: static; flex-wrap: wrap; }
+  .sticky-actions .btn { flex: 1 1 auto; }
+  body:has(form[data-sale-form], .sticky-actions) .fab { display: none; }
   .kv { grid-template-columns: 1fr; gap: .1rem; }
   .kv dd { margin-bottom: .5rem; }
 }
