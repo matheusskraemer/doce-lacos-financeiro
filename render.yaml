@@ -1,10 +1,10 @@
 # Blueprint do Render (Infraestrutura como código).
-# Antes de aplicar, confira no painel do Render os nomes de planos e regiões vigentes.
+# Planos: web 0.5c-512mb (~US$ 7/mês) e Postgres 0.1c-256mb (~US$ 6/mês).
 services:
   - type: web
     name: doce-lacos-financeiro
     runtime: python
-    plan: starter
+    plan: 0.5c-512mb
     region: virginia
     buildCommand: pip install -r requirements.txt
     preDeployCommand: flask --app wsgi db upgrade && flask --app wsgi setup
@@ -25,7 +25,8 @@ services:
 
 databases:
   - name: doce-lacos-db
-    plan: basic-256mb
+    plan: 0.1c-256mb
+    postgresMajorVersion: "17"
     region: virginia
     databaseName: docelacos
     user: docelacos
