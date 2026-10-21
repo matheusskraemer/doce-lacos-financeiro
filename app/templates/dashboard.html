@@ -1,0 +1,182 @@
+{% extends "base.html" %}
+{% from "_macros.html" import period_seg, empty, title_status %}
+{% set page_title = "Visão geral" %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1 class="page-title">Visão geral</h1>
+    <p class="page-sub">{{ period.label }} · {{ period.start|data }} a {{ period.end|data }}</p>
+  </div>
+  {{ period_seg(period, 'dashboard.index') }}
+</div>
+
+{% if not has_accounts %}
+<div class="panel mb-4">
+  {{ empty('Comece cadastrando suas contas',
+           'Informe onde está o dinheiro da Doce Laços hoje (conta bancária, caixa, carteira digital) e o saldo de cada uma. A partir daí, cada venda e despesa atualiza o saldo automaticamente.',
+           url_for('config.index', aba='contas'), 'Cadastrar contas financeiras') }}
+</div>
+{% endif %}
+
+<section class="hero mb-4" aria-label="Resumo do caixa">
+  <div>
+    <p class="hero-statement">
+      Hoje a {{ company.company_name if company else 'Doce Laços' }} tem
+      <strong class="{{ 'neg' if balance_now < 0 }}">{{ balance_now|brl }}</strong> disponíveis.
+      Se tudo o que está previsto acontecer, em {{ proj.until|data }} serão
+      <strong class="{{ 'neg' if proj.projected < 0 }}">{{ proj.projected|brl }}</strong>.
+    </p>
+    <p class="hero-notes mb-0">
+      Até lá: {{ proj.receivable|brl }} a receber e {{ proj.payable|brl }} a pagar
+      {%- if payables.overdue_count or receivables.overdue_count %}, incluindo valores vencidos{% endif %}.
+      <a href="{{ url_for('fluxo.index') }}">Ver fluxo de caixa</a>
+    </p>
+  </div>
+  <div class="hero-side">
+    {% for b in balances if b.account.active %}
+      <div class="acc-line {{ '' if b.account.include_in_total else 'out' }}">
+        <span class="name">{{ b.account.name }}</span><span class="num">{{ b.balance|brl }}</span>
+      </div>
+    {% else %}
+      <span class="text-muted small">Nenhuma conta financeira cadastrada.</span>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="metrics mb-4" aria-label="Indicadores do período">
+  <a class="metric" href="{{ url_for('vendas.index', periodo=period.key, inicio=period.start, fim=period.end) }}">
+    <span class="label">Vendas no período</span>
+    <span class="value num text-start">{{ sales.net|brl }}</span>
+    <span class="hint">{{ sales.count }} venda{{ 's' if sales.count != 1 }}{% if sales.discount %} · {{ sales.discount|brl }} em descontos{% endif %}</span>
+  </a>
+  <a class="metric" href="{{ url_for('relatorios.show', key='recebimentos', periodo=period.key, inicio=period.start, fim=period.end) }}">
+    <span class="label">Recebido no período</span>
+    <span class="value num text-start">{{ cash['in']|brl }}</span>
+    <span class="hint">Dinheiro que de fato entrou</span>
+  </a>
+  <a class="metric" href="{{ url_for('relatorios.show', key='pagamentos', periodo=period.key, inicio=period.start, fim=period.end) }}">
+    <span class="label">Pago no período</span>
+    <span class="value num text-start">{{ cash['out']|brl }}</span>
+    <span class="hint">{{ paid_groups.operacional|brl }} despesas · {{ paid_groups.mercadoria|brl }} mercadorias</span>
+  </a>
+  <a class="metric" href="{{ url_for('relatorios.show', key='resultado', periodo=period.key, inicio=period.start, fim=period.end) }}">
+    <span class="label">Resultado de caixa</span>
+    <span class="value num text-start {{ 'amount-out' if cash.result < 0 else '' }}">{{ cash.result|brl(sign=True) }}</span>
+    <span class="hint">Recebido − pago. Não é lucro contábil.</span>
+  </a>
+  <a class="metric" href="{{ url_for('contas.pagar') }}">
+    <span class="label">Contas a pagar</span>
+    <span class="value num text-start">{{ payables.total|brl }}</span>
+    {% if payables.overdue_count %}<span class="hint neg">{{ payables.overdue_total|brl }} vencido{{ 's' if payables.overdue_count > 1 }}</span>
+    {% else %}<span class="hint">{{ payables.upcoming_total|brl }} nos próximos {{ upcoming_days }} dias</span>{% endif %}
+  </a>
+  <a class="metric" href="{{ url_for('contas.receber') }}">
+    <span class="label">Contas a receber</span>
+    <span class="value num text-start">{{ receivables.total|brl }}</span>
+    {% if receivables.overdue_count %}<span class="hint warn">{{ receivables.overdue_total|brl }} em atraso</span>
+    {% else %}<span class="hint">{{ receivables.upcoming_total|brl }} nos próximos {{ upcoming_days }} dias</span>{% endif %}
+  </a>
+  <a class="metric" href="{{ url_for('produtos.compras', periodo=period.key, inicio=period.start, fim=period.end) }}">
+    <span class="label">Compras de mercadorias</span>
+    <span class="value num text-start">{{ purchases.total|brl }}</span>
+    <span class="hint">{{ purchases.count }} compra{{ 's' if purchases.count != 1 }} registrada{{ 's' if purchases.count != 1 }} no período</span>
+  </a>
+  <a class="metric" href="{{ url_for('fluxo.index') }}">
+    <span class="label">Saldo projetado em {{ proj.days }} dias</span>
+    <span class="value num text-start {{ 'amount-out' if proj.projected < 0 else '' }}">{{ proj.projected|brl }}</span>
+    <span class="hint">Saldo atual + a receber − a pagar</span>
+  </a>
+</section>
+
+<div class="row g-4 mb-4">
+  <div class="col-xl-8">
+    <section class="panel h-100">
+      <div class="panel-head"><h2 class="section-title">Entradas, saídas e saldo</h2><span class="small text-muted">{{ period.label }}</span></div>
+      <div class="panel-body">
+        {% if has_movements %}<div class="chart-box"><canvas id="chart-cash" aria-label="Gráfico de entradas, saídas e saldo"></canvas></div>
+        {% else %}<p class="text-muted mb-0">Os gráficos aparecem assim que houver lançamentos registrados.</p>{% endif %}
+      </div>
+    </section>
+  </div>
+  <div class="col-xl-4">
+    <section class="panel h-100">
+      <div class="panel-head"><h2 class="section-title">Próximos compromissos</h2><a class="small" href="{{ url_for('contas.pagar') }}">Ver todos</a></div>
+      <div class="panel-body">
+        {% set items = (payables.overdue + payables.upcoming + receivables.overdue + receivables.upcoming)|sort(attribute='due_date') %}
+        {% if items %}
+        <ul class="list-plain">
+          {% for t in items[:8] %}
+          <li>
+            <div>
+              <a class="text-reset fw-semibold text-decoration-none" href="{{ url_for('titulos.detail', title_id=t.id) }}">{{ t.description }}</a>
+              <div class="when">{{ 'Receber' if t.kind == 'receber' else 'Pagar' }} · {{ t.due_date|data }} {{ title_status(t, today) }}</div>
+            </div>
+            <span class="num {{ 'amount-in' if t.kind == 'receber' else 'amount-out' }}">{{ t.open_amount|brl }}</span>
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+          <p class="text-muted mb-0">Nada vencido nem vencendo nos próximos {{ upcoming_days }} dias.</p>
+        {% endif %}
+      </div>
+    </section>
+  </div>
+</div>
+
+{% if has_movements %}
+<div class="row g-4 mb-4">
+  <div class="col-lg-6">
+    <section class="panel h-100">
+      <div class="panel-head"><h2 class="section-title">Evolução das vendas</h2></div>
+      <div class="panel-body"><div class="chart-box sm"><canvas id="chart-sales" aria-label="Gráfico de vendas"></canvas></div></div>
+    </section>
+  </div>
+  <div class="col-lg-6">
+    <section class="panel h-100">
+      <div class="panel-head"><h2 class="section-title">Últimos 6 meses</h2><span class="small text-muted">Recebido × pago</span></div>
+      <div class="panel-body"><div class="chart-box sm"><canvas id="chart-months" aria-label="Comparativo mensal"></canvas></div></div>
+    </section>
+  </div>
+  <div class="col-lg-6">
+    <section class="panel h-100">
+      <div class="panel-head"><h2 class="section-title">Despesas pagas por categoria</h2></div>
+      <div class="panel-body"><div class="chart-box sm"><canvas id="chart-categories" aria-label="Despesas por categoria"></canvas></div></div>
+    </section>
+  </div>
+  <div class="col-lg-6">
+    <section class="panel h-100">
+      <div class="panel-head"><h2 class="section-title">Operação × mercadorias</h2><span class="small text-muted">Pagamentos no período</span></div>
+      <div class="panel-body"><div class="chart-box sm"><canvas id="chart-split" aria-label="Despesas operacionais e mercadorias"></canvas></div></div>
+    </section>
+  </div>
+</div>
+
+<section class="panel">
+  <div class="panel-head"><h2 class="section-title">Últimas movimentações de caixa</h2><a class="small" href="{{ url_for('relatorios.show', key='movimentacoes') }}">Histórico completo</a></div>
+  <div class="table-wrap">
+    <table class="table-dl">
+      <thead><tr><th>Data</th><th>Descrição</th><th>Conta</th><th class="num">Valor</th></tr></thead>
+      <tbody>
+      {% for s in recent %}
+        <tr>
+          <td>{{ s.date|data }}</td>
+          <td><a class="row-link" href="{{ url_for('titulos.detail', title_id=s.title_id) }}">{{ s.title.description }}</a>
+            {% if s.is_reversal %}<span class="sub">Estorno</span>{% endif %}</td>
+          <td>{{ s.account.name }}</td>
+          <td class="num {{ 'amount-in' if s.cash_effect > 0 else 'amount-out' }}">{{ s.cash_effect|brl(sign=True) }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="4" class="text-muted">Nenhuma movimentação de caixa ainda.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+
+<script type="application/json" id="dash-data">{{ charts|tojson }}</script>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='vendor/chartjs/chart.umd.min.js') }}"></script>
+<script src="{{ url_for('static', filename='js/charts.js') }}?v=1"></script>
+{% endblock %}

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Doce Laços (logotipo provisório)">
+  <circle cx="32" cy="32" r="31" fill="#fff"/>
+  <g fill="none" stroke="#8E4A67" stroke-width="3" stroke-linejoin="round" stroke-linecap="round">
+    <path d="M32 30 C24 20 13 18 12 25 C11 32 22 36 32 32 Z"/>
+    <path d="M32 30 C40 20 51 18 52 25 C53 32 42 36 32 32 Z"/>
+    <path d="M30 33 L23 47 M34 33 L41 47"/>
+  </g>
+  <circle cx="32" cy="31.5" r="3.6" fill="#B8915A"/>
+</svg>

@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>{% block title %}{{ page_title|default('Financeiro') }}{% endblock %} · {{ company.company_name if company else 'Doce Laços' }}</title>
+  <link rel="icon" href="{{ url_for('brand.logo') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/bootstrap/bootstrap.min.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/icons/bootstrap-icons.min.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v=1">
+  <link rel="stylesheet" href="{{ url_for('brand.brand_css') }}">
+</head>
+<body>
+{% from "_macros.html" import csrf %}
+{% block body %}
+<div class="app">
+  <aside class="sidebar" id="sidebar" aria-label="Menu principal">
+    <a class="brand-block" href="{{ url_for('dashboard.index') }}">
+      <img class="brand-logo" src="{{ url_for('brand.logo') }}" alt="">
+      <div>
+        <div class="brand-name">{{ company.company_name if company else 'Doce Laços' }}</div>
+        <div class="brand-tag">{{ company.tagline if company and company.tagline else 'Gestão financeira' }}</div>
+      </div>
+    </a>
+    {% set ep = request.endpoint or '' %}
+    <nav class="nav-side">
+      <div class="nav-group">
+        <a href="{{ url_for('dashboard.index') }}" class="{{ 'active' if ep == 'dashboard.index' }}"><i class="bi bi-house"></i> Visão geral</a>
+      </div>
+      <div class="nav-group">
+        <div class="nav-group-label">Movimento</div>
+        <a href="{{ url_for('vendas.index') }}" class="{{ 'active' if ep.startswith('vendas.') }}"><i class="bi bi-bag-heart"></i> Vendas e receitas</a>
+        <a href="{{ url_for('despesas.index') }}" class="{{ 'active' if ep.startswith('despesas.') }}"><i class="bi bi-receipt"></i> Despesas</a>
+        <a href="{{ url_for('produtos.compras') }}" class="{{ 'active' if ep.startswith('produtos.') }}"><i class="bi bi-box-seam"></i> Produtos e compras</a>
+      </div>
+      <div class="nav-group">
+        <div class="nav-group-label">Compromissos</div>
+        <a href="{{ url_for('contas.pagar') }}" class="{{ 'active' if ep == 'contas.pagar' }}"><i class="bi bi-arrow-up-right-circle"></i> Contas a pagar</a>
+        <a href="{{ url_for('contas.receber') }}" class="{{ 'active' if ep == 'contas.receber' }}"><i class="bi bi-arrow-down-left-circle"></i> Contas a receber</a>
+        <a href="{{ url_for('fluxo.index') }}" class="{{ 'active' if ep.startswith('fluxo.') }}"><i class="bi bi-graph-up"></i> Fluxo de caixa</a>
+      </div>
+      <div class="nav-group">
+        <div class="nav-group-label">Análise</div>
+        <a href="{{ url_for('relatorios.index') }}" class="{{ 'active' if ep.startswith('relatorios.') }}"><i class="bi bi-file-earmark-bar-graph"></i> Relatórios</a>
+        <a href="{{ url_for('config.index') }}" class="{{ 'active' if ep.startswith('config.') }}"><i class="bi bi-sliders"></i> Configurações</a>
+      </div>
+    </nav>
+    <div class="sidebar-foot">
+      <div class="mb-1">{{ current_user.display_name or current_user.username }}</div>
+      <form method="post" action="{{ url_for('auth.logout') }}">{{ csrf() }}
+        <button class="btn btn-link btn-sm text-decoration-none" type="submit"><i class="bi bi-box-arrow-left"></i> Sair</button>
+      </form>
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <div class="d-flex align-items-center gap-2">
+        <button class="btn btn-quiet btn-sm d-md-none" type="button" data-toggle-sidebar aria-controls="sidebar" aria-label="Abrir menu"><i class="bi bi-list"></i></button>
+        <span class="crumb">{% block crumb %}{{ today|data }}{% endblock %}</span>
+      </div>
+      <div class="dropdown new-entry">
+        <button class="btn btn-brand dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+          <i class="bi bi-plus-lg"></i> Novo lançamento
+        </button>
+        {% include "_new_menu.html" %}
+      </div>
+    </header>
+
+    <main class="content" id="conteudo">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        <div class="flash-stack" role="status">
+          {% for cat, msg in messages %}
+            {% set icon = {'success': 'check-circle', 'danger': 'exclamation-octagon', 'warning': 'exclamation-triangle', 'info': 'info-circle'}.get(cat, 'info-circle') %}
+            <div class="flash flash-{{ cat }}"><i class="bi bi-{{ icon }}"></i><div>{{ msg }}</div>
+              <button type="button" class="btn-close" data-dismiss-flash aria-label="Fechar"></button></div>
+          {% endfor %}
+        </div>
+        {% endif %}
+      {% endwith %}
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+
+  <div class="dropup">
+    <button class="btn btn-brand fab" type="button" data-bs-toggle="dropdown" aria-label="Novo lançamento"><i class="bi bi-plus-lg"></i></button>
+    <div class="new-entry">{% include "_new_menu.html" %}</div>
+  </div>
+</div>
+{% endblock %}
+<script src="{{ url_for('static', filename='vendor/bootstrap/bootstrap.bundle.min.js') }}"></script>
+{% block scripts %}{% endblock %}
+<script src="{{ url_for('static', filename='js/app.js') }}?v=1"></script>
+</body>
+</html>

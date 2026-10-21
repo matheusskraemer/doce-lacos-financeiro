@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Entrar{% endblock %}
+{% block body %}
+<div class="login-wrap">
+  <section class="login-art" aria-hidden="true">
+    <div class="d-flex align-items-center gap-3">
+      <img class="brand-logo" src="{{ url_for('brand.logo') }}" alt="">
+      <div>
+        <div class="brand-name">{{ company.company_name if company else 'Doce Laços' }}</div>
+        <div class="brand-tag">{{ company.tagline if company and company.tagline else 'Gestão financeira' }}</div>
+      </div>
+    </div>
+    <div>
+      <h1>Cada laço vendido, cada conta paga, no lugar certo.</h1>
+      <p>Saldo, vendas, contas e projeção do caixa da {{ company.company_name if company else 'Doce Laços' }} em um só lugar.</p>
+    </div>
+    <svg class="ribbon" viewBox="0 0 64 64"><g fill="none" stroke="currentColor" stroke-width="1.2"><path d="M32 30 C24 20 13 18 12 25 C11 32 22 36 32 32 Z"/><path d="M32 30 C40 20 51 18 52 25 C53 32 42 36 32 32 Z"/><path d="M30 33 L23 47 M34 33 L41 47"/></g></svg>
+    <small class="text-white-50">Acesso restrito.</small>
+  </section>
+  <section class="login-form">
+    <form method="post" novalidate>
+      {{ csrf() }}
+      <img class="brand-logo mb-3 d-md-none" src="{{ url_for('brand.logo') }}" alt="">
+      <h2 class="display h3 mb-1">Entrar</h2>
+      <p class="text-muted mb-4">Use o usuário e a senha cadastrados para o sistema.</p>
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for cat, msg in messages %}<div class="flash flash-{{ cat }} mb-3"><i class="bi bi-info-circle"></i><div>{{ msg }}</div></div>{% endfor %}
+      {% endwith %}
+      {% if not has_user %}
+        <div class="callout mb-3">Nenhum usuário cadastrado ainda. Crie o acesso pelo terminal com <code>flask --app wsgi create-user</code> (veja o README).</div>
+      {% endif %}
+      <div class="mb-3">
+        <label class="form-label" for="username">Usuário</label>
+        <input class="form-control" id="username" name="username" value="{{ username }}" autocomplete="username" autocapitalize="none" required autofocus>
+      </div>
+      <div class="mb-4">
+        <label class="form-label" for="password">Senha</label>
+        <input class="form-control" id="password" name="password" type="password" autocomplete="current-password" required>
+      </div>
+      <button class="btn btn-brand w-100 py-2" type="submit">Entrar</button>
+      <p class="form-text mt-3">Esqueceu a senha? A redefinição é feita pelo terminal da hospedagem com <code>flask reset-password</code>.</p>
+    </form>
+  </section>
+</div>
+{% endblock %}

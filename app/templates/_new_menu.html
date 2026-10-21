@@ -1,0 +1,8 @@
+<ul class="dropdown-menu dropdown-menu-end">
+  <li><a class="dropdown-item" href="{{ url_for('vendas.new') }}"><i class="bi bi-bag-heart"></i><span>Venda<small>À vista, a prazo ou parcelada</small></span></a></li>
+  <li><a class="dropdown-item" href="{{ url_for('despesas.new') }}"><i class="bi bi-receipt"></i><span>Despesa<small>Paga agora ou a pagar</small></span></a></li>
+  <li><a class="dropdown-item" href="{{ url_for('produtos.nova_compra') }}"><i class="bi bi-box-seam"></i><span>Compra de mercadorias<small>Para revenda</small></span></a></li>
+  <li><a class="dropdown-item" href="{{ url_for('vendas.new_receita') }}"><i class="bi bi-plus-circle"></i><span>Outra receita<small>Reembolso, aporte, rendimento</small></span></a></li>
+  <li><hr class="dropdown-divider"></li>
+  <li><a class="dropdown-item" href="{{ url_for('fluxo.transferencias') }}"><i class="bi bi-arrow-left-right"></i><span>Transferência entre contas<small>Não altera o resultado</small></span></a></li>
+</ul>

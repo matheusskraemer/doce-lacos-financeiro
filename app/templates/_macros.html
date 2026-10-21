@@ -1,0 +1,96 @@
+{% macro title_status(t, ref) -%}
+{%- set st = t.status_on(ref) -%}
+{%- set map = {
+  'liquidado': ('st-ok', 'Recebida' if t.kind == 'receber' else 'Paga'),
+  'vencido': ('st-late', 'Vencida'),
+  'parcial': ('st-part', 'Recebida em parte' if t.kind == 'receber' else 'Paga em parte'),
+  'pendente': ('st-open', 'A receber' if t.kind == 'receber' else 'A pagar'),
+  'cancelado': ('st-off', 'Cancelada')} -%}
+{%- set cls, label = map[st] -%}
+<span class="status {{ cls }}">{{ label }}</span>
+{%- endmacro %}
+
+{% macro doc_status(key, labels) -%}
+{%- set cls = {'recebida': 'st-ok', 'paga': 'st-ok', 'parcial': 'st-part', 'a_receber': 'st-open', 'a_pagar': 'st-open', 'cancelada': 'st-off'}[key] -%}
+<span class="status {{ cls }}">{{ labels[key] }}</span>
+{%- endmacro %}
+
+{% macro empty(title, text, action_url=None, action_label=None) -%}
+<div class="empty">
+  <img class="bow" src="{{ url_for('static', filename='img/bow.svg') }}" alt="">
+  <h3>{{ title }}</h3>
+  <p>{{ text }}</p>
+  {% if action_url %}<a class="btn btn-brand" href="{{ action_url }}"><i class="bi bi-plus-lg"></i> {{ action_label }}</a>{% endif %}
+</div>
+{%- endmacro %}
+
+{% macro money_field(name, label, value='', required=False, help=None, id=None) -%}
+<label class="form-label" for="{{ id or name }}">{{ label }}</label>
+<div class="input-group">
+  <span class="input-group-text">R$</span>
+  <input class="form-control input-money" id="{{ id or name }}" name="{{ name }}" inputmode="decimal" autocomplete="off"
+         value="{{ value }}" placeholder="0,00" {% if required %}required{% endif %} data-money>
+</div>
+{% if help %}<div class="form-text">{{ help }}</div>{% endif %}
+{%- endmacro %}
+
+{% macro select_opts(items, selected, empty_label=None) -%}
+{% if empty_label is not none %}<option value="">{{ empty_label }}</option>{% endif %}
+{% for it in items %}<option value="{{ it.id }}" {% if selected|string == it.id|string %}selected{% endif %}>{{ it.name }}</option>{% endfor %}
+{%- endmacro %}
+
+{% macro period_seg(period, endpoint, extra={}) -%}
+{% set opts = [('hoje','Hoje'),('7d','7 dias'),('mes','Mês atual'),('mes_anterior','Mês anterior'),('ano','Ano')] %}
+<div class="period-bar">
+  <nav class="seg" aria-label="Período">
+    {% for key, label in opts %}
+      <a class="{{ 'on' if period.key == key }}" href="{{ url_for(endpoint, periodo=key, **extra) }}">{{ label }}</a>
+    {% endfor %}
+  </nav>
+  <form class="d-flex gap-1 align-items-center" method="get" action="{{ url_for(endpoint) }}">
+    {% for k, v in extra.items() %}{% if v %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endif %}{% endfor %}
+    <input type="hidden" name="periodo" value="personalizado">
+    <input class="form-control form-control-sm" type="date" name="inicio" value="{{ period.start.isoformat() }}" aria-label="Data inicial">
+    <span class="text-muted small">a</span>
+    <input class="form-control form-control-sm" type="date" name="fim" value="{{ period.end.isoformat() }}" aria-label="Data final">
+    <button class="btn btn-sm btn-quiet" type="submit">Aplicar</button>
+  </form>
+</div>
+{%- endmacro %}
+
+{% macro csrf() -%}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{%- endmacro %}
+{% macro reqkey() -%}<input type="hidden" name="request_key" value="{{ new_request_key() }}">{%- endmacro %}
+
+{% macro settle_form(t, accounts, methods, today, next_url=None, compact=False) -%}
+<form method="post" action="{{ url_for('titulos.settle', title_id=t.id) }}" class="settle-form" data-once>
+  {{ csrf() }}{{ reqkey() }}
+  {% if next_url %}<input type="hidden" name="next" value="{{ next_url }}">{% endif %}
+  <div class="row g-2">
+    <div class="{{ 'col-6' if compact else 'col-sm-6' }}">
+      {{ money_field('amount', 'Valor', t.open_amount|money_input, required=True, id='amt-' ~ t.id) }}
+    </div>
+    <div class="{{ 'col-6' if compact else 'col-sm-6' }}">
+      <label class="form-label" for="dt-{{ t.id }}">Data {{ 'do recebimento' if t.kind == 'receber' else 'do pagamento' }}</label>
+      <input class="form-control" type="date" id="dt-{{ t.id }}" name="date" value="{{ today.isoformat() }}" required>
+    </div>
+    <div class="col-sm-6">
+      <label class="form-label" for="acc-{{ t.id }}">Conta {{ 'de destino' if t.kind == 'receber' else 'de origem' }}</label>
+      <select class="form-select" id="acc-{{ t.id }}" name="account_id" required>
+        {{ select_opts(accounts, t.expected_account_id or (accounts[0].id if accounts else ''), 'Escolha a conta') }}
+      </select>
+    </div>
+    <div class="col-sm-6">
+      <label class="form-label" for="pm-{{ t.id }}">Forma</label>
+      <select class="form-select" id="pm-{{ t.id }}" name="method_id">{{ select_opts(methods, t.expected_method_id, '—') }}</select>
+    </div>
+    <div class="col-12">
+      <label class="form-label" for="nt-{{ t.id }}">Observação <span class="text-muted fw-normal">(opcional)</span></label>
+      <input class="form-control" id="nt-{{ t.id }}" name="notes" maxlength="300">
+    </div>
+  </div>
+  <div class="d-flex gap-2 mt-3 align-items-center">
+    <button class="btn btn-pos" type="submit"><i class="bi bi-check2-circle"></i> {{ 'Registrar recebimento' if t.kind == 'receber' else 'Registrar pagamento' }}</button>
+    <span class="form-text">Em aberto: {{ t.open_amount|brl }}. Valor menor registra liquidação parcial.</span>
+  </div>
+</form>
+{%- endmacro %}
