@@ -226,6 +226,19 @@
       </form>
       <p class="form-text mt-2 mb-0">Última cópia baixada: {{ s.last_backup_download_at|data if s.last_backup_download_at else 'nunca' }}.</p>
     </div></section>
+    {% if fresh %}
+    <section class="panel mb-4"><div class="panel-head"><h2 class="section-title">Restaurar cópia</h2><span class="small text-muted">Disponível só em banco novo</span></div><div class="panel-body">
+      <p>Traz para cá todos os dados de uma cópia completa (.json) baixada em outra instalação do sistema. Fica disponível apenas enquanto este banco ainda não tem nenhum lançamento.</p>
+      <div class="callout mb-3">Depois de restaurar, os usuários e senhas passam a ser os da cópia, e você será desconectado.</div>
+      <form method="post" action="{{ url_for('config.restaurar') }}" enctype="multipart/form-data" data-once>{{ csrf() }}
+        <label class="form-label" for="rf">Arquivo da cópia</label>
+        <input class="form-control mb-2" type="file" id="rf" name="arquivo" accept="application/json,.json" required>
+        <label class="form-label" for="rp">Confirme sua senha</label>
+        <input class="form-control mb-3" type="password" id="rp" name="password" autocomplete="current-password" required>
+        <button class="btn btn-outline-brand" type="submit" data-confirm="Restaurar a cópia? Os dados do arquivo passam a valer neste sistema.">Restaurar cópia</button>
+      </form>
+    </div></section>
+    {% endif %}
   </div>
   <div class="col-lg-6">
     <section class="panel mb-4"><div class="panel-head"><h2 class="section-title">Conferência dos cálculos</h2></div><div class="panel-body">

@@ -54,7 +54,7 @@ def index():
         categories=db.session.scalars(select(Category).order_by(Category.kind, Category.group, Category.name)).all(),
         methods=db.session.scalars(select(PaymentMethod).order_by(PaymentMethod.name)).all(),
         kinds=ACCOUNT_KINDS, groups=CATEGORY_GROUPS, usage=usage, acc_usage=acc_usage, log=log, today=today(),
-        users=users, who=who,
+        users=users, who=who, fresh=database_is_fresh(),
     )
 
 
@@ -79,6 +79,8 @@ def empresa():
         upload = request.files.get("logo")
         if upload and upload.filename:
             data = upload.read()
+            if len(data) > 2 * 1024 * 1024:
+                raise ValidationError("Logotipo: envie um arquivo de até 2 MB.")
             mime = upload.mimetype
             if mime == "image/svg+xml" or upload.filename.lower().endswith(".svg"):
                 text = data.decode("utf-8", errors="ignore").lower()
@@ -279,6 +281,54 @@ def backup():
     name = f"doce-lacos_copia-completa_{datetime.now():%Y%m%d-%H%M}.json"
     return Response(dumps(payload), mimetype="application/json",
                     headers={"Content-Disposition": f'attachment; filename="{name}"'})
+
+
+# ------------------------------------------------------------------ restauração em banco novo
+def database_is_fresh() -> bool:
+    """Verdadeiro enquanto não houver nenhum dado financeiro ou operacional (só usuários e cadastros padrão)."""
+    from ..models import Order, Purchase, Sale, Settlement, Title, Transfer
+    return not any(db.session.scalar(select(model.id).limit(1))
+                   for model in (Account, Sale, Purchase, Title, Settlement, Transfer, Order))
+
+
+@bp.post("/restaurar")
+def restaurar():
+    """Restaura uma cópia completa (JSON) — SOMENTE em um banco novo, sem lançamentos.
+
+    Serve para trazer os dados de outra hospedagem. Exige a senha de quem está logado.
+    Os usuários passam a ser os da cópia; quem restaurou é desconectado.
+    """
+    import json
+
+    from ..services.backup import RestoreError, restore_all
+    user = current_user._get_current_object()
+    if not user.check_password(request.form.get("password") or ""):
+        flash("Confirme sua senha para restaurar a cópia.", "danger")
+        return redirect(url_for("config.index", aba="backup"))
+    if not database_is_fresh():
+        flash("A restauração pela tela só é permitida em um banco novo, ainda sem lançamentos.", "danger")
+        return redirect(url_for("config.index", aba="backup"))
+    upload = request.files.get("arquivo")
+    if not upload or not upload.filename:
+        flash("Escolha o arquivo da cópia (.json).", "danger")
+        return redirect(url_for("config.index", aba="backup"))
+    try:
+        payload = json.loads(upload.read().decode("utf-8"))
+        counts = restore_all(payload, force=True)
+    except (ValueError, UnicodeDecodeError):
+        db.session.rollback()
+        flash("O arquivo não é uma cópia válida (JSON ilegível).", "danger")
+        return redirect(url_for("config.index", aba="backup"))
+    except RestoreError as exc:
+        db.session.rollback()
+        flash(f"Restauração cancelada: {exc}", "danger")
+        return redirect(url_for("config.index", aba="backup"))
+    audit("restaurar", "backup", None, "Cópia completa restaurada pela tela: "
+          + ", ".join(f"{k}={v}" for k, v in counts.items() if v))
+    db.session.commit()
+    logout_user()
+    flash("Cópia restaurada. Entre com o usuário e a senha que valiam no sistema de origem.", "success")
+    return redirect(url_for("auth.login"))
 
 
 @bp.get("/conferencia")

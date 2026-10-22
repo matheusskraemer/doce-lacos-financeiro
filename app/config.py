@@ -7,7 +7,8 @@ from datetime import timedelta
 
 
 def _database_url(default: str | None = None) -> str | None:
-    url = os.environ.get("DATABASE_URL", default)
+    # Neon (integração do Vercel) entrega DATABASE_URL; algumas integrações usam POSTGRES_URL.
+    url = os.environ.get("DATABASE_URL") or os.environ.get("POSTGRES_URL") or default
     if not url:
         return url
     # Provedores costumam entregar "postgres://"; o SQLAlchemy 2 exige o driver explícito.
@@ -18,10 +19,21 @@ def _database_url(default: str | None = None) -> str | None:
     return url
 
 
+def _engine_options(url: str | None) -> dict:
+    opts = {"pool_pre_ping": True, "pool_recycle": 280}
+    if os.environ.get("VERCEL"):
+        # Funções do Vercel: cada instância mantém só um pool pequeno de conexões.
+        opts.update(pool_size=1, max_overflow=2, pool_timeout=10)
+    if url and "-pooler." in url:
+        # Conexão via PgBouncer (modo transação) do Neon: sem prepared statements no servidor.
+        opts["connect_args"] = {"prepare_threshold": None}
+    return opts
+
+
 class BaseConfig:
     SECRET_KEY = os.environ.get("SECRET_KEY")
     SQLALCHEMY_DATABASE_URI = _database_url()
-    SQLALCHEMY_ENGINE_OPTIONS = {"pool_pre_ping": True, "pool_recycle": 280}
+    SQLALCHEMY_ENGINE_OPTIONS = _engine_options(SQLALCHEMY_DATABASE_URI)
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
     # Sessão e cookies
@@ -36,8 +48,8 @@ class BaseConfig:
     WTF_CSRF_TIME_LIMIT = None  # o token vale enquanto durar a sessão
     WTF_CSRF_SSL_STRICT = True
 
-    # Uploads (logotipo)
-    MAX_CONTENT_LENGTH = 2 * 1024 * 1024
+    # Uploads (logotipo até 2 MB; cópia de segurança). O Vercel aceita no máximo 4,5 MB por requisição.
+    MAX_CONTENT_LENGTH = 4 * 1024 * 1024
 
     # Proteção de login
     LOGIN_MAX_FAILURES_PER_IP = int(os.environ.get("LOGIN_MAX_FAILURES_PER_IP", "5"))

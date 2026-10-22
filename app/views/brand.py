@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import re
 
-from flask import Blueprint, Response, abort, current_app, url_for
+from flask import Blueprint, Response, redirect, url_for
 
 from ..extensions import db
 from ..models import CompanySettings
@@ -56,7 +56,7 @@ def brand_css():
 def logo():
     s = db.session.get(CompanySettings, 1)
     if not s or not s.logo_data:
-        return current_app.send_static_file("img/logo-provisorio.svg")
+        return redirect(url_for("static", filename="img/logo-provisorio.svg"), code=302)
     resp = Response(s.logo_data, mimetype=s.logo_mime or "image/png")
     resp.headers["Cache-Control"] = "no-cache"
     resp.headers["Content-Security-Policy"] = "default-src 'none'; style-src 'unsafe-inline'"

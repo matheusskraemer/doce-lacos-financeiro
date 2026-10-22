@@ -16,3 +16,5 @@ backups/
 htmlcov/
 .DS_Store
 screenshots/
+.vercel/
+.env*.local

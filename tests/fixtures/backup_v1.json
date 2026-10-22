@@ -1,0 +1,334 @@
+{
+ "format": "doce-lacos-backup",
+ "version": 1,
+ "created_at": "2026-10-22T12:37:51.647234+00:00",
+ "tables": {
+  "users": [
+   {
+    "id": 1,
+    "username": "carolina",
+    "display_name": "Carolina",
+    "password_hash": "scrypt:32768:8:1$mpHpam9D5H9YspAo$d6e3c2e50515efa089ffa83be2fc0994ff18478fad30edfdfb28645c9101eb47f2ea83744c0bfa373dcf29e23fd3c151fb7b24bbf3086aae28625df4f90b457c",
+    "session_version": 1,
+    "failed_attempts": 0,
+    "locked_until": null,
+    "last_login_at": null,
+    "password_changed_at": "2026-10-22T09:37:50.309102-03:00",
+    "created_at": "2026-10-22T09:37:50.332219-03:00"
+   }
+  ],
+  "company_settings": [
+   {
+    "id": 1,
+    "company_name": "Doce Laços",
+    "tagline": "Gestão financeira",
+    "color_primary": "#8E4A67",
+    "color_accent": "#B8915A",
+    "color_ink": "#2E2433",
+    "logo_data": null,
+    "logo_mime": null,
+    "logo_updated_at": null,
+    "projection_days": 30,
+    "upcoming_days": 7,
+    "default_period": "mes_atual",
+    "last_backup_download_at": null
+   }
+  ],
+  "accounts": [
+   {
+    "id": 1,
+    "name": "Banco",
+    "kind": "banco",
+    "opening_balance": "500.00",
+    "opening_date": "2026-10-12",
+    "include_in_total": true,
+    "active": true,
+    "notes": null,
+    "created_at": "2026-10-22T09:37:50.328794-03:00"
+   }
+  ],
+  "categories": [
+   {
+    "id": 1,
+    "name": "Vendas",
+    "kind": "receita",
+    "grp": "venda",
+    "active": true,
+    "system": true
+   },
+   {
+    "id": 2,
+    "name": "Reembolsos",
+    "kind": "receita",
+    "grp": "outra_receita",
+    "active": true,
+    "system": false
+   },
+   {
+    "id": 3,
+    "name": "Aporte dos sócios",
+    "kind": "receita",
+    "grp": "outra_receita",
+    "active": true,
+    "system": false
+   },
+   {
+    "id": 4,
+    "name": "Rendimentos",
+    "kind": "receita",
+    "grp": "outra_receita",
+    "active": true,
+    "system": false
+   },
+   {
+    "id": 5,
+    "name": "Outras receitas",
+    "kind": "receita",
+    "grp": "outra_receita",
+    "active": true,
+    "system": false
+   },
+   {
+    "id": 6,
+    "name": "Compra de mercadorias",
+    "kind": "despesa",
+    "grp": "mercadoria",
+    "active": true,
+    "system": true
+   },
+   {
+    "id": 7,
+    "name": "Embalagens",
+    "kind": "despesa",
+    "grp": "operacional",
+    "active": true,
+    "system": false
+   },
+   {
+    "id": 8,
+    "name": "Frete e entregas",
+    "kind": "despesa",
+    "grp": "operacional",
+    "active": true,
+    "system": false
+   },
+   {
+    "id": 9,
+    "name": "Aluguel e infraestrutura",
+    "kind": "despesa",
+    "grp": "operacional",
+    "active": true,
+    "system": false
+   },
+   {
+    "id": 10,
+    "name": "Água, energia e internet",
+    "kind": "despesa",
+    "grp": "operacional",
+    "active": true,
+    "system": false
+   },
+   {
+    "id": 11,
+    "name": "Marketing e publicidade",
+    "kind": "despesa",
+    "grp": "operacional",
+    "active": true,
+    "system": false
+   },
+   {
+    "id": 12,
+    "name": "Taxas de cartão e bancárias",
+    "kind": "despesa",
+    "grp": "operacional",
+    "active": true,
+    "system": false
+   },
+   {
+    "id": 13,
+    "name": "Impostos e taxas",
+    "kind": "despesa",
+    "grp": "operacional",
+    "active": true,
+    "system": false
+   },
+   {
+    "id": 14,
+    "name": "Sistemas e ferramentas",
+    "kind": "despesa",
+    "grp": "operacional",
+    "active": true,
+    "system": false
+   },
+   {
+    "id": 15,
+    "name": "Materiais de consumo",
+    "kind": "despesa",
+    "grp": "operacional",
+    "active": true,
+    "system": false
+   },
+   {
+    "id": 16,
+    "name": "Serviços terceirizados",
+    "kind": "despesa",
+    "grp": "operacional",
+    "active": true,
+    "system": false
+   },
+   {
+    "id": 17,
+    "name": "Outras despesas",
+    "kind": "despesa",
+    "grp": "operacional",
+    "active": true,
+    "system": false
+   }
+  ],
+  "payment_methods": [
+   {
+    "id": 1,
+    "name": "Pix",
+    "active": true
+   },
+   {
+    "id": 2,
+    "name": "Dinheiro",
+    "active": true
+   },
+   {
+    "id": 3,
+    "name": "Cartão de crédito",
+    "active": true
+   },
+   {
+    "id": 4,
+    "name": "Cartão de débito",
+    "active": true
+   },
+   {
+    "id": 5,
+    "name": "Boleto",
+    "active": true
+   },
+   {
+    "id": 6,
+    "name": "Transferência bancária",
+    "active": true
+   }
+  ],
+  "products": [],
+  "sales": [
+   {
+    "id": 1,
+    "uid": "a906442c-f77a-46d7-a809-eb54b391a661",
+    "request_key": null,
+    "description": "Venda antiga",
+    "sale_date": "2026-10-20",
+    "customer": null,
+    "gross_amount": "80.00",
+    "discount": "0.00",
+    "net_amount": "80.00",
+    "payment_method_id": null,
+    "notes": null,
+    "status": "ativa",
+    "canceled_at": null,
+    "cancel_reason": null,
+    "created_at": "2026-10-22T09:37:50.346925-03:00"
+   }
+  ],
+  "sale_items": [],
+  "purchases": [],
+  "purchase_items": [],
+  "titles": [
+   {
+    "id": 1,
+    "uid": "c5284093-4004-475f-b65b-1b06b78062a8",
+    "request_key": null,
+    "kind": "receber",
+    "origin": "venda",
+    "description": "Venda antiga",
+    "category_id": 1,
+    "counterparty": null,
+    "competence_date": "2026-10-20",
+    "due_date": "2026-10-20",
+    "amount": "80.00",
+    "expected_method_id": null,
+    "expected_account_id": 1,
+    "sale_id": 1,
+    "purchase_id": null,
+    "installment_no": 1,
+    "installment_count": 1,
+    "recurrence_group": null,
+    "notes": null,
+    "canceled_at": null,
+    "cancel_reason": null,
+    "created_at": "2026-10-22T09:37:50.353244-03:00",
+    "updated_at": "2026-10-22T09:37:50.353248-03:00"
+   },
+   {
+    "id": 2,
+    "uid": "8a810381-be42-4fa3-9bda-dfb6102bc778",
+    "request_key": null,
+    "kind": "pagar",
+    "origin": "despesa",
+    "description": "Caixinhas",
+    "category_id": 7,
+    "counterparty": null,
+    "competence_date": "2026-10-22",
+    "due_date": "2026-10-27",
+    "amount": "30.00",
+    "expected_method_id": null,
+    "expected_account_id": null,
+    "sale_id": null,
+    "purchase_id": null,
+    "installment_no": 1,
+    "installment_count": 1,
+    "recurrence_group": null,
+    "notes": null,
+    "canceled_at": null,
+    "cancel_reason": null,
+    "created_at": "2026-10-22T09:37:50.372144-03:00",
+    "updated_at": "2026-10-22T09:37:50.372149-03:00"
+   }
+  ],
+  "settlements": [
+   {
+    "id": 1,
+    "uid": "bcc980ac-3e37-41b6-b06c-658160581f05",
+    "request_key": null,
+    "title_id": 1,
+    "account_id": 1,
+    "payment_method_id": null,
+    "date": "2026-10-20",
+    "amount": "80.00",
+    "is_reversal": false,
+    "reverses_id": null,
+    "notes": null,
+    "created_at": "2026-10-22T09:37:50.360064-03:00"
+   }
+  ],
+  "transfers": [],
+  "audit_log": [
+   {
+    "id": 1,
+    "created_at": "2026-10-22T09:37:50.357463-03:00",
+    "user_id": null,
+    "action": "criar",
+    "entity": "venda",
+    "entity_id": 1,
+    "summary": "Venda “Venda antiga” de R$ 80,00 recebida à vista"
+   },
+   {
+    "id": 2,
+    "created_at": "2026-10-22T09:37:50.373805-03:00",
+    "user_id": null,
+    "action": "criar",
+    "entity": "titulo",
+    "entity_id": 2,
+    "summary": "Despesa “Caixinhas” de R$ 30,00"
+   }
+  ]
+ },
+ "sha256": "caf0648bef2f0f29a5dc648dc442e57a5e7bff852087dc39ed12fc45a92c7c3d"
+}

@@ -14,7 +14,10 @@ from .extensions import csrf, db, login_manager, migrate
 
 def create_app(config_name: str | None = None, **overrides) -> Flask:
     config_name = config_name or os.environ.get("APP_ENV", "production")
-    app = Flask(__name__)
+    # Arquivos estáticos ficam em public/static: no Vercel, a pasta public/ é servida direto pela CDN;
+    # localmente (e em outras hospedagens) o próprio Flask serve a mesma pasta em /static.
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    app = Flask(__name__, static_folder=os.path.join(root, "public", "static"), static_url_path="/static")
     app.config.from_object(CONFIGS[config_name])
     app.config.update(overrides)
 
@@ -118,7 +121,8 @@ def _register_security(app: Flask) -> None:
         from sqlalchemy import text
         db.session.execute(text("select 1"))
         rev = db.session.execute(text("select version_num from alembic_version")).scalar()
-        return {"status": "ok", "commit": (os.environ.get("RENDER_GIT_COMMIT") or "")[:7], "schema": rev}
+        commit = os.environ.get("VERCEL_GIT_COMMIT_SHA") or os.environ.get("RENDER_GIT_COMMIT") or ""
+        return {"status": "ok", "commit": commit[:7], "schema": rev}
 
 
 def _register_errors(app: Flask) -> None:
@@ -140,7 +144,7 @@ def _register_errors(app: Flask) -> None:
     @app.errorhandler(413)
     def too_large(e):
         return render_template("errors/error.html", code=413, title="Arquivo grande demais",
-                               message="Envie um arquivo de até 2 MB."), 413
+                               message="Envie um arquivo de até 4 MB (o logotipo deve ter até 2 MB)."), 413
 
     @app.errorhandler(500)
     def server_error(e):

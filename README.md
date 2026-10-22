@@ -38,10 +38,10 @@ app/
     backup.py          cópia completa e restauração em JSON
   views/               telas (uma por módulo)
   templates/           HTML (Jinja2)
-  static/              CSS, JS, fontes e bibliotecas
 migrations/            migrações do banco
+public/static/         CSS, JS, fontes e bibliotecas (servidos pela CDN no Vercel)
 tests/                 testes automatizados (PostgreSQL)
-scripts/               backup e restauração com pg_dump + GPG
+scripts/               build do Vercel, backup e restauração com pg_dump + GPG
 docs/                  regras financeiras, backup, hospedagem
 ```
 
@@ -68,7 +68,7 @@ createdb docelacos_test && createdb docelacos_restore
 TEST_DATABASE_URL=postgresql+psycopg://postgres@localhost:5432/docelacos_test pytest -q
 ```
 
-Resultado da última execução: **58 testes aprovados**. Eles cobrem os 16 critérios de aceite do projeto (venda à vista, venda futura, recebimento parcial, despesa paga e pendente, pagamento parcial, compra a prazo, estorno e cancelamento, transferência, fluxo realizado e projetado, comparação de períodos, exportação, persistência, rota protegida, backup e restauração, ausência de duplicidade) e também CSRF, bloqueio de login, hash de senha, cabeçalhos de segurança e upload de logotipo.
+Resultado da última execução: **64 testes aprovados**. Eles cobrem os 16 critérios de aceite do projeto (venda à vista, venda futura, recebimento parcial, despesa paga e pendente, pagamento parcial, compra a prazo, estorno e cancelamento, transferência, fluxo realizado e projetado, comparação de períodos, exportação, persistência, rota protegida, backup e restauração, ausência de duplicidade) e também CSRF, bloqueio de login, hash de senha, cabeçalhos de segurança e upload de logotipo.
 
 Além disso, o comando abaixo confere, a qualquer momento, se os saldos batem lançamento a lançamento:
 
@@ -76,7 +76,11 @@ Além disso, o comando abaixo confere, a qualquer momento, se os saldos batem la
 flask --app wsgi check
 ```
 
-## Publicar na internet (Render)
+## Publicar na internet
+
+**Vercel + Neon (atual):** veja [`docs/VERCEL.md`](docs/VERCEL.md).
+
+### Alternativa: Render
 
 Resumo do que **você** precisa fazer; nada disso foi feito por mim, porque envolve criar conta e contratar serviço.
 

@@ -87,9 +87,11 @@ def test_todas_as_telas_abrem_vazias(client):
     for url in ["/", "/vendas", "/vendas/nova", "/receitas", "/receitas/nova", "/despesas", "/despesas/nova",
                 "/produtos", "/produtos/novo", "/compras", "/compras/nova", "/contas-a-pagar", "/contas-a-receber",
                 "/fluxo-de-caixa", "/fluxo-de-caixa?visao=semana", "/fluxo-de-caixa?visao=mes", "/transferencias",
-                "/relatorios", "/configuracoes/", "/marca.css", "/marca/logo"]:
+                "/relatorios", "/configuracoes/", "/marca.css", "/static/css/app.css", "/static/img/logo-provisorio.svg"]:
         r = client.get(url)
         assert r.status_code == 200, url
+    logo = client.get("/marca/logo")
+    assert logo.status_code == 302 and logo.headers["Location"].endswith("/static/img/logo-provisorio.svg")
     for tab in ["empresa", "contas", "categorias", "formas", "seguranca", "backup", "historico"]:
         assert client.get(f"/configuracoes/?aba={tab}").status_code == 200
     html = client.get("/").get_data(as_text=True)

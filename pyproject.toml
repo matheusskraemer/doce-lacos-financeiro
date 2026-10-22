@@ -1,0 +1,29 @@
+[project]
+name = "doce-lacos-financeiro"
+version = "2.0.0"
+description = "Gestão financeira e encomendas da Doce Laços"
+requires-python = "~=3.13.0"
+dependencies = [
+    "Flask==3.1.3",
+    "Flask-SQLAlchemy==3.1.1",
+    "Flask-Migrate==4.1.0",
+    "Flask-Login==0.6.3",
+    "Flask-WTF==1.3.0",
+    "SQLAlchemy==2.1.5",
+    "alembic==1.20.0",
+    "psycopg[binary]==3.3.6",
+    "openpyxl==3.1.5",
+]
+
+[dependency-groups]
+dev = ["pytest==9.1.1", "gunicorn==26.2.0"]
+
+[tool.vercel]
+entrypoint = "wsgi:app"
+
+[tool.vercel.scripts]
+# Migrações e configuração inicial do banco, somente em deploys de produção.
+build = "python scripts/vercel_build.py"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
